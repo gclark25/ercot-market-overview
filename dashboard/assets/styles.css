@@ -72,7 +72,63 @@ th:first-child, td:first-child {
 }
 
 .node-search {
-  margin-bottom: 1rem;
+  margin-bottom: 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.node-search select,
+.node-search input {
+  background: var(--background);
+  color: var(--text-primary);
+  border: 1px solid var(--text-secondary);
+  padding: 0.4rem 0.6rem;
+}
+
+.node-search button {
+  background: none;
+  border: 1px solid var(--accent-primary);
+  color: var(--accent-primary);
+  padding: 0.4rem 0.8rem;
+  cursor: pointer;
+}
+
+.peak-toggle {
+  display: block;
+  margin-bottom: 0.75rem;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+tr.peak-detail-row {
+  display: none;
+}
+
+#hubWindowsTable.show-peak-detail tr.peak-detail-row {
+  display: table-row;
+}
+
+tr.peak-on td.peak-cell {
+  color: var(--accent-tertiary);
+}
+
+tr.peak-off td.peak-cell {
+  color: var(--accent-secondary);
+}
+
+.dart-positive {
+  color: var(--accent-secondary);
+}
+
+.dart-negative {
+  color: var(--accent-tertiary);
+}
+
+.null-value {
+  color: var(--text-secondary);
 }
 
 .report-date {

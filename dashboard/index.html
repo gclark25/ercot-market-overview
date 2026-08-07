@@ -10,6 +10,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>ERCOT Market Overview</title>
   <link rel="stylesheet" href="assets/styles.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
 </head>
 <body>
   <header class="app-header">
@@ -30,6 +31,10 @@
 
       <h2>Hub DA/RT Performance</h2>
       <p class="report-date">On-peak = Mon-Fri HE 7-22. Off-peak = all other hours, including all of Sat/Sun.</p>
+      <label class="peak-toggle">
+        <input type="checkbox" id="peakBreakdownToggle" />
+        Show on-peak / off-peak breakdown
+      </label>
       <table id="hubWindowsTable">
         <thead>
           <tr>
@@ -49,10 +54,13 @@
 
     <section id="tab-prices" class="tab-panel">
       <div class="node-search">
-        <input type="text" id="nodeSearchInput" placeholder="Search any ERCOT node…" />
+        <label for="hubSelect">Hub:</label>
+        <select id="hubSelect"></select>
+        <input type="text" id="nodeSearchInput" placeholder="...or search any ERCOT node" />
         <button id="nodeSearchBtn">Search</button>
         <span id="nodeSearchStatus"></span>
       </div>
+      <p class="report-date" id="hourlyPriceDate"></p>
 
       <h2>Energy DA / RT / DART — HE 1-24</h2>
       <table id="hourlyPriceTable">
@@ -63,6 +71,7 @@
       </table>
 
       <h2>Ancillary Services DA / RT / DART — HE 1-24</h2>
+      <p class="report-date" id="asPriceDate"></p>
       <table id="asPriceTable">
         <thead>
           <tr><th>HE</th><th>Service</th><th>DA</th><th>RT</th><th>DART</th></tr>
