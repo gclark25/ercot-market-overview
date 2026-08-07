@@ -353,16 +353,6 @@ h2:first-child { margin-top: 0; }
 
 .basis-panel.visible { display: block; }
 
-.basis-row {
-  display: flex;
-  justify-content: space-between;
-  padding: 0.25rem 0;
-  font-size: 0.85rem;
-  border-bottom: 1px solid var(--surface-border);
-}
-
-.basis-row:last-child { border-bottom: none; }
-
 /* ── TB1/TB2/TB4 comparison grid (Tab 2) ── */
 .tb-grid {
   display: grid;
@@ -370,6 +360,10 @@ h2:first-child { margin-top: 0; }
   gap: 3px 0.5rem;
   font-size: 0.82rem;
   align-items: center;
+}
+
+#basisPanelRows.tb-grid {
+  grid-template-columns: 6.5rem repeat(4, 1fr);
 }
 
 .tb-header {

@@ -441,40 +441,60 @@ function renderEnergySection(key) {
 
 // ── Tab 2: Basis panel (node price - hub price, per hub) ────────────────────
 
+function getWindowAvgRt(key, window) {
+  // Hub, load zone, or fully-backfilled node: reuse the already-computed
+  // window rollup rather than re-deriving an average from raw hourly data.
+  const windowStats = REPORT_DATA?.hub_windows?.[key] || REPORT_DATA?.load_zone_windows?.[key] || BACKFILLED_NODE_CACHE[key]?.windows;
+  if (windowStats) {
+    return windowStats[window]?.overall?.avg_rt ?? null;
+  }
+  // Live-only node: no precomputed windows exist at all, only whatever the
+  // Function returned for its single fetched day — so only "yesterday" has
+  // any value; 3-Day/MTD/YTD are genuinely unavailable, not just uncomputed.
+  if (window !== "yesterday") return null;
+  const days = getPointSeries(key);
+  const day = latestDateKey(days);
+  if (!day) return null;
+  return avgField(days[day], "rt");
+}
+
 function renderBasisPanel(key) {
   const panel = document.getElementById("basisPanel");
   const dateEl = document.getElementById("basisPanelDate");
-  const rowsEl = document.getElementById("basisPanelRows");
-  if (!panel || !rowsEl) return;
+  const gridEl = document.getElementById("basisPanelRows");
+  if (!panel || !gridEl) return;
 
-  const ownDays = getPointSeries(key);
-  const day = latestDateKey(ownDays);
   const hubPrices = REPORT_DATA?.hub_prices || {};
   const otherHubs = Object.keys(hubPrices).filter((h) => h !== key);
-
-  if (!day || otherHubs.length === 0) {
+  if (otherHubs.length === 0) {
     panel.classList.remove("visible");
     return;
   }
 
-  const ownHours = ownDays[day];
-  const ownAvgRt = avgField(ownHours, "rt");
-  if (ownAvgRt === null) {
+  const windowStatsForKey = REPORT_DATA?.hub_windows?.[key] || REPORT_DATA?.load_zone_windows?.[key] || BACKFILLED_NODE_CACHE[key]?.windows;
+  const isLiveOnly = !windowStatsForKey;
+
+  const windows = [["yesterday", "Yesterday"], ["3day", "3-Day"], ["mtd", "MTD"], ["ytd", "YTD"]];
+  const ownAvgRtByWindow = {};
+  for (const [w] of windows) ownAvgRtByWindow[w] = getWindowAvgRt(key, w);
+
+  if (ownAvgRtByWindow.yesterday === null) {
     panel.classList.remove("visible");
     return;
   }
 
-  rowsEl.innerHTML = "";
+  let html = "<div></div>" + windows.map(([, label]) => `<div class="tb-header">${label}</div>`).join("");
   for (const hub of otherHubs) {
-    const hubHours = hubPrices[hub]?.[day];
-    const hubAvgRt = avgField(hubHours, "rt");
-    const basis = hubAvgRt === null ? null : ownAvgRt - hubAvgRt;
-    const row = document.createElement("div");
-    row.className = "basis-row";
-    row.innerHTML = `<span>vs ${prettifyPoint(hub)}</span><span class="${dartClass(basis)}">${fmtSignedMoney(basis)}</span>`;
-    rowsEl.appendChild(row);
+    html += `<div class="tb-label">${prettifyPoint(hub)}</div>`;
+    for (const [w] of windows) {
+      const hubAvgRt = getWindowAvgRt(hub, w);
+      const ownAvgRt = ownAvgRtByWindow[w];
+      const basis = ownAvgRt === null || hubAvgRt === null ? null : ownAvgRt - hubAvgRt;
+      html += `<div class="tb-value ${dartClass(basis)}">${fmtSignedMoney(basis)}</div>`;
+    }
   }
-  if (dateEl) dateEl.textContent = `(RT, avg for ${day})`;
+  gridEl.innerHTML = html;
+  if (dateEl) dateEl.textContent = isLiveOnly ? "(RT average — live-searched node, Yesterday only)" : "(RT average per window)";
   panel.classList.add("visible");
 }
 
