@@ -1,0 +1,81 @@
+/* Placeholder styles only. Real palette/type/layout pass happens in the
+   frontend design task — see README "Build order". These CSS variables are
+   the hook point: build_report.py (or a small build step) should eventually
+   inject each config's branding.palette into :root here per-deployment. */
+
+:root {
+  --background: #0d0f0f;
+  --accent-primary: #c9a24b;
+  --accent-secondary: #7c9885;
+  --accent-tertiary: #b5654a;
+  --text-primary: #f4f1ea;
+  --text-secondary: #9a958a;
+}
+
+body {
+  background: var(--background);
+  color: var(--text-primary);
+  font-family: system-ui, sans-serif;
+  margin: 0;
+}
+
+.app-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid var(--text-secondary);
+}
+
+.tabs {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.75rem 1.5rem;
+}
+
+.tab-btn {
+  background: none;
+  border: 1px solid var(--text-secondary);
+  color: var(--text-secondary);
+  padding: 0.5rem 1rem;
+  cursor: pointer;
+}
+
+.tab-btn.active {
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
+}
+
+.tab-panel {
+  display: none;
+  padding: 1.5rem;
+}
+
+.tab-panel.active {
+  display: block;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 1.5rem;
+}
+
+th, td {
+  border-bottom: 1px solid var(--text-secondary);
+  padding: 0.4rem 0.6rem;
+  text-align: right;
+}
+
+th:first-child, td:first-child {
+  text-align: left;
+}
+
+.node-search {
+  margin-bottom: 1rem;
+}
+
+.report-date {
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+}
