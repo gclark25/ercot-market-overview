@@ -5,6 +5,7 @@ let REPORT_DATA = null;
 let netLoadChart = null;
 let currentWindow = "yesterday";
 let currentAsType = null;
+const LIVE_NODE_CACHE = {}; // node -> {date: {hour: {...}}}, populated by successful /node-lookup calls
 
 const WINDOW_LABELS = { yesterday: "Yesterday", "3day": "Last 3 Days", mtd: "Month to Date", ytd: "Year to Date" };
 const AS_TYPE_ORDER = ["REGUP", "REGDN", "RRS", "NSPIN", "ECRS"];
@@ -31,8 +32,7 @@ function fmtMoney(v) {
 
 function fmtSignedMoney(v) {
   if (v === null || v === undefined) return "—";
-  const sign = v >= 0 ? "+" : "";
-  return `${sign}$${v.toFixed(2)}`;
+  return v >= 0 ? `+$${v.toFixed(2)}` : `-$${Math.abs(v).toFixed(2)}`;
 }
 
 function fmtNum(v, decimals = 2) {
@@ -267,7 +267,7 @@ function populateHubSelect() {
 }
 
 function getPointSeries(key) {
-  return REPORT_DATA?.hub_prices?.[key] || REPORT_DATA?.load_zone_prices?.[key] || null;
+  return REPORT_DATA?.hub_prices?.[key] || REPORT_DATA?.load_zone_prices?.[key] || LIVE_NODE_CACHE[key] || null;
 }
 
 function renderReferencePoint(key) {
@@ -437,19 +437,20 @@ document.getElementById("nodeSearchBtn")?.addEventListener("click", async () => 
     return;
   }
 
-  // Not a hub or load zone already in the daily pull — falls back to the
-  // live per-node lookup Function, which is still a stub as of this build.
-  // Basis-vs-hub for arbitrary searched nodes depends on that Function being
-  // real; expect this branch to fail until functions/node-lookup.js is implemented.
+  // Not a hub or load zone already in the daily pull — live per-node lookup
+  // via the Cloudflare Function. Cache the result so switching away and back
+  // (or the basis panel's cross-reference) doesn't re-fetch.
   status.textContent = "Looking up…";
   try {
-    const res = await fetch(`/node-lookup?node=${encodeURIComponent(raw)}&window=yesterday`);
-    if (!res.ok) throw new Error(`Lookup failed (${res.status})`);
+    const res = await fetch(`/node-lookup?node=${encodeURIComponent(raw)}`);
     const result = await res.json();
-    status.textContent = "";
-    console.log("Node lookup result:", result); // TODO: render into the energy chart + basisPanel once node-lookup.js is real
+    if (!res.ok) throw new Error(result.error || `Lookup failed (${res.status})`);
+
+    LIVE_NODE_CACHE[result.node] = result.days;
+    status.textContent = `Showing live lookup for ${result.node} (not in the daily pull — fetched just now)`;
+    renderReferencePoint(result.node);
   } catch (err) {
-    status.textContent = "Lookup failed — that node isn't in the daily pull yet. Try a hub or load zone from the dropdown.";
+    status.textContent = err.message || "Lookup failed.";
     console.error(err);
   }
 });
