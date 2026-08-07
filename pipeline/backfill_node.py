@@ -67,14 +67,33 @@ def backfill_or_update(node: str, config: dict, out_dir: Path = Path("dashboard/
     yesterday = today - timedelta(days=1)
 
     existing_days: dict = {}
+    existing_windows: dict | None = None
     last_updated: str | None = None
     if out_path.exists():
         existing = json.loads(out_path.read_text())
         existing_days = existing.get("days", {})
+        existing_windows = existing.get("windows")
         last_updated = existing.get("last_updated")
+
         if last_updated == yesterday.isoformat():
-            print(f"{node}: already up to date through {last_updated} — nothing to do")
-            return False
+            # The underlying data is current — but the aggregation formula
+            # itself might have changed since this file was last written
+            # (e.g. TB1/TB2/TB4 added after this node was already
+            # backfilled). Recomputing is a pure local operation with no
+            # ERCOT call, so there's no real cost to always doing it rather
+            # than letting an already-tracked node silently go stale on
+            # every metric added after the day it was backfilled.
+            recomputed = rollup_all_windows(existing_days, today)
+            if recomputed == existing_windows:
+                print(f"{node}: already up to date through {last_updated} — nothing to do")
+                return False
+            out_path.write_text(json.dumps({
+                "node": node, "last_updated": last_updated,
+                "days": existing_days, "windows": recomputed,
+            }, indent=2))
+            print(f"{node}: data unchanged, but rollups were recomputed (aggregation logic changed since last write) -> {out_path}")
+            return True
+
         start = (date.fromisoformat(last_updated) + timedelta(days=1)).isoformat() if last_updated else today.replace(month=1, day=1).isoformat()
         print(f"{node}: incremental update, {start} -> {yesterday.isoformat()}")
     else:
