@@ -27,12 +27,17 @@ caught and skipped individually — never blocks the rest of the build.
 
 import csv as csv_module
 import io
+import time
 import zipfile
 from datetime import date, timedelta
 
 from ercot_client import ErcotCredentials, list_archive_documents, download_archive_documents
 
 BID_CLOSE_CUTOFF_HOUR_CT = 9  # 09:00 CT — as specified for this dashboard
+ARCHIVE_CALL_PACING_SECONDS = 3  # deliberate delay between archive list/download calls —
+                                  # the first real run hit 429s hammering these back-to-back
+                                  # with zero pacing (unlike every other pull in this pipeline,
+                                  # which already paces itself); this brings it in line.
 
 LOAD_EMIL = "np3-565-cd"
 WIND_EMIL = "np4-732-cd"
@@ -121,7 +126,11 @@ def get_bid_close_forecast(creds: ErcotCredentials, token: str, days_forecast: i
     today = date.today()
 
     # One broad archive-list query per report covering the whole window,
-    # rather than a separate list call per delivery day.
+    # rather than a separate list call per delivery day. Paced with a short
+    # delay between the 3 calls — ERCOT's rate limit appears to apply across
+    # the whole subscription, not per-endpoint, so hammering these list calls
+    # back-to-back risks tripping into 429s that then bleed into whatever
+    # pull runs next in the pipeline, not just this one.
     earliest_cutoff_day = today - timedelta(days=1)
     latest_cutoff_day = today + timedelta(days=max(days_forecast - 1, 0))
     post_from = f"{earliest_cutoff_day.isoformat()}T00:00:00"
@@ -129,11 +138,26 @@ def get_bid_close_forecast(creds: ErcotCredentials, token: str, days_forecast: i
 
     try:
         load_archives = list_archive_documents(LOAD_EMIL, token, creds, post_from, post_to)
+        time.sleep(ARCHIVE_CALL_PACING_SECONDS)
         wind_archives = list_archive_documents(WIND_EMIL, token, creds, post_from, post_to)
+        time.sleep(ARCHIVE_CALL_PACING_SECONDS)
         solar_archives = list_archive_documents(SOLAR_EMIL, token, creds, post_from, post_to)
+        time.sleep(ARCHIVE_CALL_PACING_SECONDS)
     except Exception as e:
         print(f"    WARN: bid-close archive listing failed entirely — {e}")
         return {}
+
+    # Memoized by (emil_id, docId) — consecutive delivery days can end up
+    # picking the same posting (e.g. across a weekend), and there's no
+    # reason to re-download and re-parse the same file twice.
+    download_cache: dict[tuple[str, int], list[dict]] = {}
+
+    def cached_download(emil_id: str, doc_id: int, label: str) -> list[dict]:
+        key = (emil_id, doc_id)
+        if key not in download_cache:
+            download_cache[key] = _download_and_parse_csv(emil_id, doc_id, token, creds, label)
+            time.sleep(ARCHIVE_CALL_PACING_SECONDS)
+        return download_cache[key]
 
     result: dict[str, dict] = {}
     for offset in range(days_forecast):
@@ -150,9 +174,9 @@ def get_bid_close_forecast(creds: ErcotCredentials, token: str, days_forecast: i
                 print(f"    WARN: bid-close for {target} — missing archive posting for at least one of load/wind/solar before {cutoff_iso}, skipping")
                 continue
 
-            load_rows = _download_and_parse_csv(LOAD_EMIL, load_doc["docId"], token, creds, "load")
-            wind_rows = _download_and_parse_csv(WIND_EMIL, wind_doc["docId"], token, creds, "wind")
-            solar_rows = _download_and_parse_csv(SOLAR_EMIL, solar_doc["docId"], token, creds, "solar")
+            load_rows = cached_download(LOAD_EMIL, load_doc["docId"], "load")
+            wind_rows = cached_download(WIND_EMIL, wind_doc["docId"], "wind")
+            solar_rows = cached_download(SOLAR_EMIL, solar_doc["docId"], "solar")
 
             load_by_hour = _extract_day_from_rows(load_rows, target, LOAD_VALUE_FIELD_CANDIDATES)
             wind_by_hour = _extract_day_from_rows(wind_rows, target, WIND_VALUE_FIELD_CANDIDATES)

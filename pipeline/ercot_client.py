@@ -242,19 +242,42 @@ def ercot_get_records(
 # inside those CSVs haven't been confirmed against a real download — see
 # pipeline/bid_close_forecast.py for how this is handled defensively.
 
+def _post_bytes_with_retry(path: str, headers: dict, json_body: dict, max_attempts: int = 3) -> bytes:
+    """POST counterpart to _get_json_with_retry — same 429/Retry-After handling,
+    just returning raw bytes instead of parsed JSON (the archive download
+    endpoint returns a ZIP, not JSON)."""
+    last_exc = None
+    for attempt in range(max_attempts):
+        try:
+            r = requests.post(f"{BASE_URL}/{path}", headers=headers, json=json_body, timeout=60)
+            if r.status_code == 429:
+                retry_after = r.headers.get("Retry-After")
+                wait = float(retry_after) if retry_after else DEFAULT_429_BACKOFF_SECONDS
+                if attempt < max_attempts - 1:
+                    print(f"    WARN: {path} rate limited (429) — waiting {wait:.0f}s before retry...")
+                    time.sleep(wait)
+                    continue
+                r.raise_for_status()
+            r.raise_for_status()
+            return r.content
+        except Exception as e:
+            last_exc = e
+            if attempt < max_attempts - 1:
+                print(f"    WARN: {path} attempt {attempt + 1} failed ({e}) — retrying in 10s...")
+                time.sleep(10)
+    raise last_exc
+
+
 def list_archive_documents(emil_id: str, token: str, creds: ErcotCredentials, post_datetime_from: str, post_datetime_to: str) -> list[dict]:
     """GET /archive/{emil_id}?postDatetimeFrom=...&postDatetimeTo=...
     Returns [{"docId": ..., "friendlyName": ..., "postDatetime": ...}, ...]."""
     headers = {"Authorization": f"Bearer {token}", "Ocp-Apim-Subscription-Key": creds.subscription_key}
     params = {"postDatetimeFrom": post_datetime_from, "postDatetimeTo": post_datetime_to, "size": 1000}
-    r = requests.get(f"{BASE_URL}/archive/{emil_id}", headers=headers, params=params, timeout=45)
-    r.raise_for_status()
-    return r.json().get("archives", [])
+    body = _get_json_with_retry(f"archive/{emil_id}", headers, params)
+    return body.get("archives", [])
 
 
 def download_archive_documents(emil_id: str, doc_ids: list[int], token: str, creds: ErcotCredentials) -> bytes:
     """POST /archive/{emil_id}/download {"docIds": [...]} -> raw ZIP bytes."""
     headers = {"Authorization": f"Bearer {token}", "Ocp-Apim-Subscription-Key": creds.subscription_key}
-    r = requests.post(f"{BASE_URL}/archive/{emil_id}/download", headers=headers, json={"docIds": doc_ids}, timeout=60)
-    r.raise_for_status()
-    return r.content
+    return _post_bytes_with_retry(f"archive/{emil_id}/download", headers, {"docIds": doc_ids})
