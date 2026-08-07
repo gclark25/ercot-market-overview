@@ -29,17 +29,20 @@
       <canvas id="netLoadChart"></canvas>
 
       <h2>Hub DA/RT Performance</h2>
+      <p class="report-date">On-peak = Mon-Fri HE 7-22. Off-peak = all other hours, including all of Sat/Sun.</p>
       <table id="hubWindowsTable">
         <thead>
           <tr>
             <th>Hub</th>
             <th>Window</th>
+            <th>Peak</th>
             <th>Avg DA</th>
             <th>Avg RT</th>
             <th>DART Spread</th>
             <th>RT Volatility</th>
           </tr>
         </thead>
+        <!-- one row per hub x window x {overall, on_peak, off_peak} — see WindowStats in aggregations.py -->
         <tbody><!-- populated by app.js from data/latest.json --></tbody>
       </table>
     </section>
@@ -54,9 +57,9 @@
       <h2>Energy DA / RT / DART — HE 1-24</h2>
       <table id="hourlyPriceTable">
         <thead>
-          <tr><th>HE</th><th>DA</th><th>RT</th><th>DART</th></tr>
+          <tr><th>HE</th><th>Peak</th><th>DA</th><th>RT</th><th>DART</th></tr>
         </thead>
-        <tbody></tbody>
+        <tbody><!-- each hour already carries a "peak": "on"|"off" tag from market_data.py --></tbody>
       </table>
 
       <h2>Ancillary Services DA / RT / DART — HE 1-24</h2>

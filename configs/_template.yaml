@@ -42,6 +42,13 @@ data_scope:
     - HB_BUSAVG
   featured_nodes: []                         # e.g. ["ACME_BESS1_UNIT1"] — optional, leave empty if not applicable
 
+# --- Peak convention ---------------------------------------------------------
+# On-peak = Mon-Fri, HE 7-22. Off-peak = everything else (HE 23,24,1-6 on
+# weekdays, and all 24 hours on Sat/Sun). This is currently a fixed rule (see
+# pipeline/peak_calendar.py), not a per-customer setting — every deployment
+# uses the same definition. If a future customer needs a different convention,
+# that'll need to become a config field; it isn't one yet.
+
 # --- Feature flags -----------------------------------------------------------
 features:
   net_load_overview: true                    # Tab 1

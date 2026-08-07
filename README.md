@@ -22,16 +22,16 @@ ercot-market-overview/
 │   ├── _template.yaml         # schema + comments — copy this to onboard a new customer/tenant
 │   └── internal.yaml          # HEN internal deployment (default branding, all features on)
 ├── pipeline/
-│   ├── ercot_client.py        # shared ERCOT API auth + request wrapper
-│   ├── market_data.py         # net load (3d history + 5d forecast), hub DA/RT, AS DA/RT pulls
-│   ├── aggregations.py        # yesterday / 3-day / MTD / YTD rollups + DART/volatility calcs
-│   ├── ai_narrative.py        # Claude API call for the Tab 3 recap
+│   ├── ercot_client.py        # shared ERCOT API auth + request wrapper (real, ported from hen-morning-report)
+│   ├── peak_calendar.py       # on-peak/off-peak rule: Mon-Fri HE 7-22 = on-peak, everything else = off-peak
+│   ├── market_data.py         # net load (3d history + 5d forecast), hub DA/RT, AS DA/RT pulls (real, ported)
+│   ├── aggregations.py        # yesterday / 3-day / MTD / YTD rollups, each split into overall/on-peak/off-peak (real)
+│   ├── ai_narrative.py        # Claude API call for the Tab 3 recap (still a stub)
 │   └── build_report.py        # entrypoint — reads a config, runs the pipeline, writes output JSON
-
+├── functions/
+│   └── node-lookup.js         # Cloudflare Pages Function — live DA/RT/DART lookup for any node, called by the Tab 2 search box
 ├── dashboard/
 │   ├── index.html             # 3-tab shell (Overview / Prices & AS / Intelligence)
-    ├── functions/
-│       └── node-lookup.js         # Cloudflare Pages Function — live DA/RT/DART lookup for any node, called by the Tab 2 search box
 │   ├── assets/
 │   │   ├── styles.css
 │   │   └── app.js
@@ -50,13 +50,29 @@ file — no code changes, unless they need a feature the pipeline doesn't have y
 
 ## Status
 
-This is scaffolding: directory layout, config schema, and workflow are real and
-wired together; the Python pipeline modules and the frontend are stubs with clear
-signatures and `TODO`/`PORT FROM` markers, ready to be filled in as separate passes.
+- `ercot_client.py`, `peak_calendar.py`, `market_data.py`, `aggregations.py` —
+  real, working implementations, ported from hen-morning-report's confirmed
+  endpoints/parsing logic and unit-tested against fixture data (peak
+  boundaries + a hand-verified DART rollup).
+- `ai_narrative.py` — still a stub. `build_report.py` catches its
+  `NotImplementedError`/`RuntimeError` so the rest of the report still writes
+  successfully in the meantime.
+- `dashboard/` frontend — structural shell only, no real design/rendering yet.
+- `functions/node-lookup.js` — stub, moved under `dashboard/` so Cloudflare
+  Pages picks it up once implemented.
+
+## On-peak / off-peak
+
+On-peak = Monday-Friday, HE 7-22. Off-peak = everything else. Defined once in
+`pipeline/peak_calendar.py`; `market_data.get_hub_energy_prices()` tags every
+hourly record with it at pull time, and `aggregations.rollup_window()` returns
+`overall` / `on_peak` / `off_peak` stats for every window. The frontend reads
+the tag rather than re-deriving the rule.
 
 ## Build order (suggested)
 
-1. ~~Repo scaffolding + config pattern~~ ← this pass
-2. Backend pipeline (`pipeline/*.py`) — 3d/5d windows, hub DA/RT/AS aggregations
-3. Frontend (`dashboard/`) — real 3-tab design pass
+1. ~~Repo scaffolding + config pattern~~ ← done
+2. ~~Backend pipeline core~~ ← done (`ai_narrative.py` pending)
+3. Frontend (`dashboard/`) — real 3-tab design pass, render real data + on/off-peak breakdown
 4. `functions/node-lookup.js` — live any-node search
+5. `ai_narrative.py` — port the Tab 3 recap prompt/generation
