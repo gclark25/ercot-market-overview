@@ -254,7 +254,7 @@ def get_hub_energy_prices(creds: ErcotCredentials, token: str, hubs: list[str], 
         try:
             rows = ercot_get_raw("np6-905-cd/spp_node_zone_hub", token, creds, {
                 "settlementPoint": hub, "deliveryDateFrom": start, "deliveryDateTo": end, "size": 5000,
-            })
+            }, paginate=True)
             day_hour_prices: dict[str, dict[int, list[float]]] = defaultdict(lambda: defaultdict(list))
             for row in rows:
                 d = str(row[0])[:10] if isinstance(row, list) and row else None
@@ -270,7 +270,7 @@ def get_hub_energy_prices(creds: ErcotCredentials, token: str, hubs: list[str], 
         try:
             rows = ercot_get_raw("np4-190-cd/dam_stlmnt_pnt_prices", token, creds, {
                 "settlementPoint": hub, "deliveryDateFrom": start, "deliveryDateTo": end, "size": 5000,
-            })
+            }, paginate=True)
             for row in rows:
                 d = str(row[0])[:10] if isinstance(row, list) and row else None
                 hr, price = extract_da_price_with_hour(row)
@@ -345,7 +345,7 @@ def get_as_prices(creds: ErcotCredentials, token: str, start: str, end: str) -> 
     this is the one that actually returns data)
     """
     da_rows = ercot_get_records("np4-188-cd/dam_clear_price_for_cap", token, creds,
-                                 {"deliveryDateFrom": start, "deliveryDateTo": end})
+                                 {"deliveryDateFrom": start, "deliveryDateTo": end}, paginate=True)
     da = _bucket_as_rows(da_rows, start, end)
 
     rt_rows = ercot_get_records("np6-332-cd/rt_clear_price_cap_sced", token, creds, {

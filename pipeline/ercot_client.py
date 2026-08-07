@@ -69,37 +69,63 @@ def get_ercot_token(creds: ErcotCredentials) -> str:
     return token
 
 
-def ercot_get_raw(path: str, token: str, creds: ErcotCredentials, params: dict[str, Any] | None = None) -> list:
-    """Positional-access style — mirrors hen_morning_report.ercot_get().
-    One retry on transient failures (timeout / 5xx)."""
+def ercot_get_raw(
+    path: str,
+    token: str,
+    creds: ErcotCredentials,
+    params: dict[str, Any] | None = None,
+    paginate: bool = False,
+) -> list:
+    """Positional-access style — mirrors hen_morning_report.ercot_get(), with
+    pagination added on top. The original single-day pulls never needed
+    pagination (a day of RT data is well under one page); YTD-range pulls
+    used elsewhere in this codebase do, so set paginate=True for those or
+    rows past the first page/`size` will silently go missing — no error,
+    just quietly wrong (too-short) history."""
     headers = {
         "Authorization": f"Bearer {token}",
         "Ocp-Apim-Subscription-Key": creds.subscription_key,
         "Accept": "application/json",
     }
-    p = {"size": 1000}
+    base_params = {"size": 1000}
     if params:
-        p.update(params)
-    for attempt in range(2):
-        try:
-            r = requests.get(f"{BASE_URL}/{path}", headers=headers, params=p, timeout=45)
-            r.raise_for_status()
-            body = r.json()
-            if isinstance(body, list):
-                return body
-            if "data" in body:
-                return body["data"]
-            for v in body.values():
-                if isinstance(v, list):
-                    return v
-            return []
-        except Exception as e:
-            if attempt == 0:
-                print(f"    WARN: {path} attempt 1 failed ({e}) — retrying in 10s...")
-                time.sleep(10)
-            else:
-                raise
-    return []
+        base_params.update(params)
+    page_size = base_params.get("size", 1000)
+
+    all_rows: list = []
+    page = 1
+    while True:
+        p = dict(base_params)
+        if paginate:
+            p["page"] = page
+
+        page_rows: list = []
+        for attempt in range(2):
+            try:
+                r = requests.get(f"{BASE_URL}/{path}", headers=headers, params=p, timeout=45)
+                r.raise_for_status()
+                body = r.json()
+                if isinstance(body, list):
+                    page_rows = body
+                elif "data" in body:
+                    page_rows = body["data"]
+                else:
+                    page_rows = next((v for v in body.values() if isinstance(v, list)), [])
+                break
+            except Exception as e:
+                if attempt == 0:
+                    print(f"    WARN: {path} page {page} attempt 1 failed ({e}) — retrying in 10s...")
+                    time.sleep(10)
+                else:
+                    raise
+
+        all_rows.extend(page_rows)
+
+        if not paginate or len(page_rows) < page_size:
+            break
+        page += 1
+
+    return all_rows
 
 
 def _normalize_field_name(f: Any) -> str:
