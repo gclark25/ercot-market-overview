@@ -81,9 +81,20 @@ def _download_and_parse_csv(emil_id: str, doc_id: int, token: str, creds: ErcotC
     raw = download_archive_documents(emil_id, [doc_id], token, creds)
     rows: list[dict] = []
     with zipfile.ZipFile(io.BytesIO(raw)) as zf:
-        for name in zf.namelist():
-            if not name.lower().endswith(".csv"):
-                continue
+        entries = zf.infolist()
+        # Unconditional — this is the one thing that was missing last run: if
+        # nothing inside ends in ".csv", the old code never printed anything
+        # at all, leaving no clue what the archive actually contains.
+        print(f"    [{label}] archive ZIP contents: {[(e.filename, e.file_size) for e in entries]}")
+
+        csv_names = [e.filename for e in entries if e.filename.lower().endswith(".csv")]
+        # Fallback: if nothing matches ".csv" by name, try every non-directory
+        # entry anyway — some ERCOT archives may name the file differently
+        # (no extension, .CSV variants already handled by .lower(), or a
+        # different format entirely that this will at least surface).
+        candidate_names = csv_names or [e.filename for e in entries if not e.filename.endswith("/")]
+
+        for name in candidate_names:
             with zf.open(name) as f:
                 text = io.TextIOWrapper(f, encoding="utf-8-sig")
                 reader = csv_module.DictReader(text)
