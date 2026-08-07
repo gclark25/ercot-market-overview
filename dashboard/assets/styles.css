@@ -177,6 +177,17 @@ h2:first-child { margin-top: 0; }
   color: var(--text-secondary);
 }
 
+.peak-bar-row--total {
+  padding-bottom: 4px;
+  margin-bottom: 2px;
+  border-bottom: 1px solid var(--surface-border);
+}
+
+.peak-bar-row--total .peak-bar-label {
+  color: var(--accent-primary);
+  font-weight: 600;
+}
+
 .peak-bar-track {
   flex: 1;
   height: 10px;
@@ -194,7 +205,7 @@ h2:first-child { margin-top: 0; }
 }
 
 .peak-bar-label {
-  width: 3.2rem;
+  width: 4.2rem;
   flex-shrink: 0;
 }
 
@@ -211,7 +222,7 @@ h2:first-child { margin-top: 0; }
 /* ── On/off-peak summary row (below the hourly time-series charts) ── */
 .peak-summary {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr 1fr 1fr;
   gap: 0.75rem;
   margin: 0.75rem 0 1.75rem;
 }
@@ -229,6 +240,7 @@ h2:first-child { margin-top: 0; }
   margin-bottom: 0.4rem;
 }
 
+.peak-summary-card.total .peak-summary-title { color: var(--accent-primary); }
 .peak-summary-card.on .peak-summary-title { color: var(--accent-tertiary); }
 .peak-summary-card.off .peak-summary-title { color: var(--accent-secondary); }
 

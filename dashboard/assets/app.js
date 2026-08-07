@@ -189,7 +189,7 @@ function renderHubCards(hubWindows) {
   let maxAbsSpread = 1;
   for (const hub of hubs) {
     const s = hubWindows[hub]?.[currentWindow];
-    for (const scope of [s?.on_peak, s?.off_peak]) {
+    for (const scope of [s?.overall, s?.on_peak, s?.off_peak]) {
       if (scope?.dart_spread !== null && scope?.dart_spread !== undefined) {
         maxAbsSpread = Math.max(maxAbsSpread, Math.abs(scope.dart_spread));
       }
@@ -217,6 +217,7 @@ function buildHubCard(hub, stats, maxAbsSpread) {
     </div>
     <div class="hub-card-spread ${dartClass(o.dart_spread)}">${fmtSignedMoney(o.dart_spread)} DART</div>
     <div class="peak-bars">
+      ${buildPeakBarRow("24Hr Avg", stats.overall, maxAbsSpread, "peak-bar-row--total")}
       ${buildPeakBarRow("On-Peak", stats.on_peak, maxAbsSpread)}
       ${buildPeakBarRow("Off-Peak", stats.off_peak, maxAbsSpread)}
     </div>
@@ -224,7 +225,7 @@ function buildHubCard(hub, stats, maxAbsSpread) {
   return card;
 }
 
-function buildPeakBarRow(label, scope, maxAbsSpread) {
+function buildPeakBarRow(label, scope, maxAbsSpread, extraClass = "") {
   const v = scope?.dart_spread;
   const pct = v === null || v === undefined ? 0 : Math.min(100, (Math.abs(v) / maxAbsSpread) * 100);
   const color = v >= 0 ? SAGE_RGB : CLAY_RGB;
@@ -233,7 +234,7 @@ function buildPeakBarRow(label, scope, maxAbsSpread) {
     ? `left:50%; width:${pct / 2}%; background:rgb(${color});`
     : `right:50%; width:${pct / 2}%; background:rgb(${color});`;
   return `
-    <div class="peak-bar-row">
+    <div class="peak-bar-row ${extraClass}">
       <span class="peak-bar-label">${label}</span>
       <div class="peak-bar-track"><div class="peak-bar-fill" style="${fillStyle}"></div></div>
       <span class="peak-bar-value ${dartClass(v)}">${fmtSignedMoney(v)}</span>
@@ -327,10 +328,19 @@ function renderPeakSummary(containerId, hoursObj) {
   const on = all.filter((h) => h.peak === "on");
   const off = all.filter((h) => h.peak === "off");
   const summarize = (arr) => ({ da: avgOf(arr, "da"), rt: avgOf(arr, "rt"), dart: avgOf(arr, "dart"), count: arr.length });
+  const allS = summarize(all);
   const onS = summarize(on);
   const offS = summarize(off);
 
   el.innerHTML = `
+    <div class="peak-summary-card total">
+      <div class="peak-summary-title">24Hr Avg (${allS.count}h)</div>
+      <div class="peak-summary-metrics">
+        <div>DA<strong>${fmtMoney(allS.da)}</strong></div>
+        <div>RT<strong>${fmtMoney(allS.rt)}</strong></div>
+        <div>DART<strong class="${dartClass(allS.dart)}">${fmtSignedMoney(allS.dart)}</strong></div>
+      </div>
+    </div>
     <div class="peak-summary-card on">
       <div class="peak-summary-title">On-Peak (${onS.count}h)</div>
       <div class="peak-summary-metrics">
