@@ -75,6 +75,31 @@ hourly record with it at pull time, and `aggregations.rollup_window()` returns
 `overall` / `on_peak` / `off_peak` stats for every window. The frontend reads
 the tag rather than re-deriving the rule.
 
+## Node search: backfill-once, append-daily
+
+Hubs and load zones get full YTD history via the daily pipeline. An
+arbitrary searched node starts with just a live single-day answer (fast,
+via `functions/node-lookup.js`), but graduates to full history automatically:
+
+1. First search for a new node → live Function answers immediately with
+   "Yesterday" only, and fires a `repository_dispatch` event in the
+   background (needs `GITHUB_DISPATCH_TOKEN` set as a Cloudflare Pages env
+   var — see the Function's file header).
+2. `.github/workflows/node-backfill.yml` catches that event, runs
+   `pipeline/backfill_node.py` for just that one node (a full YTD pull,
+   reusing the same paginated `get_hub_energy_prices` hubs already use), and
+   commits the result to `dashboard/data/nodes/<NODE>.json`.
+3. From then on, `daily-report.yml` tops that file up incrementally —
+   fetching only the new day since `last_updated`, not re-pulling the whole
+   year every time (an efficiency the hub/load-zone pull still doesn't have).
+4. The frontend tries `data/nodes/<NODE>.json` as a plain static file before
+   ever calling the live Function — once backfilled, a node is exactly as
+   fast as a hub, with full on/off-peak, basis, and TB1/TB2/TB4 support.
+
+This is currently a shared, not per-tenant, resource — fine at today's
+single-config scale; worth revisiting before a second customer onboards
+(see the comment in `daily-report.yml`'s node-update step).
+
 ## Build order (suggested)
 
 1. ~~Repo scaffolding + config pattern~~ ← done

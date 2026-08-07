@@ -25,6 +25,8 @@ jobs:
   build-and-deploy:
     needs: discover-configs
     runs-on: ubuntu-latest
+    permissions:
+      contents: write   # needed to commit updated node backfill data
     strategy:
       matrix:
         config: ${{ fromJson(needs.discover-configs.outputs.configs) }}
@@ -47,6 +49,32 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: python pipeline/build_report.py --config "configs/${{ matrix.config }}"
 
+      - name: Top up already-tracked node data
+        # dashboard/data/nodes/*.json accumulate from on-demand searches (see
+        # node-backfill.yml + functions/node-lookup.js). This just fetches
+        # each tracked node's missing day(s) and appends — same script,
+        # already-idempotent, so a node with nothing new to add is a no-op.
+        #
+        # Note: dashboard/data/nodes/ isn't namespaced per customer config,
+        # so with more than one config this would have every matrix job
+        # updating (and trying to commit) the same shared files — fine at
+        # today's single-config scale, worth revisiting before a 2nd
+        # customer onboards.
+        env:
+          ERCOT_API_USERNAME: ${{ secrets.ERCOT_API_USERNAME }}
+          ERCOT_API_PASSWORD: ${{ secrets.ERCOT_API_PASSWORD }}
+          ERCOT_SUBSCRIPTION_KEY: ${{ secrets.ERCOT_SUBSCRIPTION_KEY }}
+        run: |
+          if [ -d dashboard/data/nodes ] && [ -n "$(ls -A dashboard/data/nodes 2>/dev/null)" ]; then
+            for f in dashboard/data/nodes/*.json; do
+              node=$(basename "$f" .json)
+              echo "--- Updating tracked node: $node ---"
+              python pipeline/backfill_node.py --node "$node" --config "configs/${{ matrix.config }}" || echo "WARN: update failed for $node, continuing"
+            done
+          else
+            echo "No tracked nodes yet — nothing to update"
+          fi
+
       - name: Deploy to Cloudflare Pages
         uses: cloudflare/pages-action@v1
         with:
@@ -56,3 +84,19 @@ jobs:
           # this file so the matrix doesn't need a second YAML parse step here.
           projectName: ${{ env.CF_PROJECT_NAME }}
           directory: dashboard
+
+      - name: Commit updated node data
+        # Runs after deploy so a slow/failed git operation never delays getting
+        # fresh data live. latest.json itself stays gitignored/ephemeral as
+        # before — only the accumulating per-node files get committed.
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add dashboard/data/nodes/
+          if git diff --staged --quiet; then
+            echo "No node updates to commit"
+          else
+            git commit -m "Update tracked node data"
+            git pull --rebase --autostash
+            git push
+          fi

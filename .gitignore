@@ -3,3 +3,7 @@ __pycache__/
 .env
 node_modules/
 dashboard/data/latest.json
+# dashboard/data/nodes/*.json is intentionally NOT ignored — those files are
+# meant to be committed and incrementally updated day over day (see
+# pipeline/backfill_node.py), unlike latest.json which is fully regenerated
+# from scratch on every run.

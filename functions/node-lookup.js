@@ -24,6 +24,16 @@
  * NOT the GitHub Actions secrets, which are a separate configuration
  * surface and don't carry over here):
  *   ERCOT_API_USERNAME, ERCOT_API_PASSWORD, ERCOT_SUBSCRIPTION_KEY
+ *   GITHUB_DISPATCH_TOKEN — optional but recommended: a GitHub token with
+ *     permission to trigger repository_dispatch on this repo. When set,
+ *     every successful lookup for a node NOT already in the daily pull
+ *     fires a "backfill-node" dispatch event (see
+ *     .github/workflows/node-backfill.yml), which does a one-time full YTD
+ *     pull for that node and commits it to dashboard/data/nodes/<NODE>.json.
+ *     From then on, that node behaves like a hub — full window support,
+ *     served as a static file, no live ERCOT call needed. Without this var
+ *     set, live lookups still work exactly as before; they just never
+ *     graduate beyond single-day answers.
  */
 
 const BASE_URL = "https://api.ercot.com/api/public-reports";
@@ -32,6 +42,7 @@ const AUTH_URL =
   "/oauth2/v2.0/token?username={u}&password={p}&grant_type=password" +
   "&scope=openid+fec253ea-0d06-4272-a5e6-b478baeecd70+offline_access" +
   "&client_id=fec253ea-0d06-4272-a5e6-b478baeecd70&response_type=id_token";
+const GITHUB_REPO = "gclark25/ercot-market-overview"; // not sensitive, just identifies where to dispatch
 
 const RESULT_CACHE_TTL_SECONDS = 900; // 15 min edge cache per node — repeated searches for
                                        // the same node don't re-hit ERCOT every time.
@@ -39,6 +50,8 @@ const TOKEN_CACHE_TTL_SECONDS = 45 * 60; // ERCOT's actual token TTL isn't confi
                                           // in this codebase — 45 min is a conservative guess.
                                           // If lookups start failing with 401s, this is the
                                           // first thing to check/shorten.
+const BACKFILL_DEDUPE_TTL_SECONDS = 3600; // don't fire a new dispatch for the same node more
+                                           // than once an hour, even if it's searched repeatedly
 
 export async function onRequestGet(context) {
   const { request, env } = context;
@@ -70,7 +83,39 @@ export async function onRequestGet(context) {
 
   const response = jsonResponse(payload, 200, RESULT_CACHE_TTL_SECONDS);
   await cache.put(cacheKey, response.clone());
+
+  // Fire-and-forget: schedule the backfill trigger to run after the response
+  // is already on its way back, so it never adds latency to this search.
+  context.waitUntil(triggerNodeBackfill(node, env));
+
   return response;
+}
+
+export async function triggerNodeBackfill(node, env) {
+  if (!env.GITHUB_DISPATCH_TOKEN) return; // feature not configured — silently skip, live lookup still works fine on its own
+
+  const cache = caches.default;
+  const dedupeKey = new Request(`https://internal-cache/backfill-dispatch/${encodeURIComponent(node)}`);
+  if (await cache.match(dedupeKey)) return; // already triggered recently, don't spam dispatches
+
+  try {
+    const res = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/dispatches`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${env.GITHUB_DISPATCH_TOKEN}`,
+        Accept: "application/vnd.github+json",
+        "User-Agent": "ercot-market-overview-node-lookup",
+      },
+      body: JSON.stringify({ event_type: "backfill-node", client_payload: { node } }),
+    });
+    if (!res.ok) {
+      console.error(`Backfill dispatch failed (${res.status}): ${await res.text()}`);
+      return; // don't cache a dedupe marker for a failed dispatch — worth retrying on the next search
+    }
+    await cache.put(dedupeKey, new Response("1", { headers: { "Cache-Control": `public, max-age=${BACKFILL_DEDUPE_TTL_SECONDS}` } }));
+  } catch (err) {
+    console.error("Failed to trigger node backfill:", err);
+  }
 }
 
 // ── Auth ──────────────────────────────────────────────────────────────────
@@ -228,7 +273,26 @@ export async function lookupNode(node, token, env) {
   // Shape matches hub_prices/load_zone_prices in latest.json — { date: { hour: {...} } } —
   // so the frontend can reuse the exact same rendering code path (getPointSeries, etc.)
   // rather than needing special-case handling for live-searched nodes.
-  return { node, days: { [day]: hourData } };
+  //
+  // tb is deliberately single-day only (this Function never fetches more than
+  // one day) — same per-metric hour thresholds as aggregations.py's
+  // _daily_tb_values, so a live node's "yesterday" TB1/TB2/TB4 means exactly
+  // the same thing as a hub/load-zone's "yesterday" TB1/TB2/TB4. There's no
+  // 3-day/MTD/YTD equivalent for live-searched nodes without extending this
+  // Function to pull (and paginate) a much wider date range — not done here.
+  return { node, days: { [day]: hourData }, tb: computeDailyTb(hourData) };
+}
+
+export function computeDailyTb(hourData) {
+  const rtVals = Object.values(hourData).map((h) => h.rt).filter((v) => v !== null && v !== undefined).sort((a, b) => a - b);
+  const n = rtVals.length;
+  const sum = (arr) => arr.reduce((a, b) => a + b, 0);
+  return {
+    tb1: n >= 2 ? round2((rtVals[n - 1] - rtVals[0]) / 24) : null,
+    tb2: n >= 4 ? round2((sum(rtVals.slice(-2)) - sum(rtVals.slice(0, 2))) / 24) : null,
+    tb4: n >= 8 ? round2((sum(rtVals.slice(-4)) - sum(rtVals.slice(0, 4))) / 24) : null,
+    hour_count: n,
+  };
 }
 
 function jsonResponse(body, status = 200, cacheSeconds = 0) {

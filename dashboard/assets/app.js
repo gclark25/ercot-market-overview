@@ -6,6 +6,8 @@ let netLoadChart = null;
 let currentWindow = "yesterday";
 let currentAsType = null;
 const LIVE_NODE_CACHE = {}; // node -> {date: {hour: {...}}}, populated by successful /node-lookup calls
+const LIVE_NODE_TB_CACHE = {}; // node -> {tb1, tb2, tb4, hour_count} for "yesterday" only
+const BACKFILLED_NODE_CACHE = {}; // node -> {node, last_updated, days, windows}, from dashboard/data/nodes/<NODE>.json
 
 const WINDOW_LABELS = { yesterday: "Yesterday", "3day": "Last 3 Days", mtd: "Month to Date", ytd: "Year to Date" };
 const AS_TYPE_ORDER = ["REGUP", "REGDN", "RRS", "NSPIN", "ECRS"];
@@ -221,6 +223,11 @@ function buildHubCard(hub, stats, maxAbsSpread) {
       ${buildPeakBarRow("On-Peak", stats.on_peak, maxAbsSpread)}
       ${buildPeakBarRow("Off-Peak", stats.off_peak, maxAbsSpread)}
     </div>
+    <div class="hub-card-metrics hub-card-tb">
+      <div>TB1<strong>${fmtMoney(stats.tb1)}</strong></div>
+      <div>TB2<strong>${fmtMoney(stats.tb2)}</strong></div>
+      <div>TB4<strong>${fmtMoney(stats.tb4)}</strong></div>
+    </div>
   `;
   return card;
 }
@@ -268,12 +275,57 @@ function populateHubSelect() {
 }
 
 function getPointSeries(key) {
-  return REPORT_DATA?.hub_prices?.[key] || REPORT_DATA?.load_zone_prices?.[key] || LIVE_NODE_CACHE[key] || null;
+  return REPORT_DATA?.hub_prices?.[key] || REPORT_DATA?.load_zone_prices?.[key] || BACKFILLED_NODE_CACHE[key]?.days || LIVE_NODE_CACHE[key] || null;
+}
+
+function getTbStats(key) {
+  // Hub, load zone, or a fully-backfilled node: full window rollups already computed.
+  const windowStats = REPORT_DATA?.hub_windows?.[key] || REPORT_DATA?.load_zone_windows?.[key] || BACKFILLED_NODE_CACHE[key]?.windows;
+  if (windowStats) {
+    return { yesterday: windowStats.yesterday, "3day": windowStats["3day"], mtd: windowStats.mtd, ytd: windowStats.ytd, liveOnly: false };
+  }
+  // Live-searched node not yet backfilled: this Function only ever fetches
+  // one day, so only "yesterday" is available — 3-Day/MTD/YTD would need it
+  // to pull (and paginate) a much wider date range, which isn't built. Once
+  // this node is backfilled (see resolveAndRenderLocation), it'll show up
+  // via the windowStats branch above instead on the next search.
+  const liveTb = LIVE_NODE_TB_CACHE[key];
+  if (liveTb) {
+    return { yesterday: liveTb, "3day": null, mtd: null, ytd: null, liveOnly: true };
+  }
+  return null;
+}
+
+function renderTbPanel(key) {
+  const panel = document.getElementById("tbPanel");
+  const grid = document.getElementById("tbPanelGrid");
+  const note = document.getElementById("tbPanelNote");
+  if (!panel || !grid) return;
+
+  const stats = getTbStats(key);
+  if (!stats) {
+    panel.classList.remove("visible");
+    return;
+  }
+
+  const windows = [["yesterday", "Yesterday"], ["3day", "3-Day"], ["mtd", "MTD"], ["ytd", "YTD"]];
+  let html = "<div></div>" + windows.map(([, label]) => `<div class="tb-header">${label}</div>`).join("");
+  for (const metric of ["tb1", "tb2", "tb4"]) {
+    html += `<div class="tb-label">${metric.toUpperCase()}</div>`;
+    for (const [w] of windows) {
+      const val = stats[w] ? stats[w][metric] : null;
+      html += `<div class="tb-value">${fmtMoney(val)}</div>`;
+    }
+  }
+  grid.innerHTML = html;
+  if (note) note.textContent = stats.liveOnly ? "(live-searched node — Yesterday only)" : "";
+  panel.classList.add("visible");
 }
 
 function renderReferencePoint(key) {
   renderEnergySection(key);
   renderBasisPanel(key);
+  renderTbPanel(key);
 }
 
 document.getElementById("hubSelect")?.addEventListener("change", (e) => renderReferencePoint(e.target.value));
@@ -449,18 +501,38 @@ async function resolveAndRenderLocation(query) {
     return;
   }
 
-  // Not a hub or load zone already in the daily pull (and not a previously
-  // cached live lookup) — go to the live per-node Function. Works both for
-  // a curated-list code (e.g. LZ_AEN, clicked from a suggestion) and for
-  // arbitrary free-text ERCOT settlement point codes typed directly.
   if (status) status.textContent = "Looking up…";
+
+  // Already backfilled from a previous search (by anyone, any session)?
+  // Check the static file before ever calling the live Function — this is
+  // just a normal cached static-asset fetch, no Function invocation, no
+  // ERCOT call, and it has full multi-window history once it exists.
+  try {
+    const res = await fetch(`data/nodes/${encodeURIComponent(exactCode)}.json`);
+    if (res.ok) {
+      const nodeData = await res.json();
+      BACKFILLED_NODE_CACHE[nodeData.node] = nodeData;
+      if (status) status.textContent = `${nodeData.node} — full history available (updated through ${nodeData.last_updated})`;
+      renderReferencePoint(nodeData.node);
+      return;
+    }
+  } catch (err) {
+    // fall through to the live lookup below
+  }
+
+  // Not a hub or load zone already in the daily pull, and not yet backfilled
+  // — go to the live per-node Function for an immediate single-day answer.
+  // That Function also triggers a one-time backfill in the background, so a
+  // repeat search for this same node later on will hit the branch above
+  // instead and get full history.
   try {
     const res = await fetch(`/node-lookup?node=${encodeURIComponent(query)}`);
     const result = await res.json();
     if (!res.ok) throw new Error(result.error || `Lookup failed (${res.status})`);
 
     LIVE_NODE_CACHE[result.node] = result.days;
-    if (status) status.textContent = `Showing live lookup for ${result.node} (not in the daily pull — fetched just now)`;
+    if (result.tb) LIVE_NODE_TB_CACHE[result.node] = result.tb;
+    if (status) status.textContent = `Showing live lookup for ${result.node} (not in the daily pull yet — full history will be available on a future visit)`;
     renderReferencePoint(result.node);
   } catch (err) {
     if (status) status.textContent = err.message || "Lookup failed.";

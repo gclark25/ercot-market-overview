@@ -1,0 +1,53 @@
+name: On-Demand Node Backfill
+
+# Triggered by functions/node-lookup.js the first time someone searches a
+# settlement point that isn't a configured hub/load zone. Does a one-time
+# full YTD pull for that single node and commits it to
+# dashboard/data/nodes/<NODE>.json — after this, it behaves like a hub for
+# search purposes (full window support) rather than the live Function's
+# single-day-only answer. daily-report.yml tops this file up incrementally
+# from here on, so this workflow only ever needs to do the expensive full
+# pull once per node.
+
+on:
+  repository_dispatch:
+    types: [backfill-node]
+
+permissions:
+  contents: write
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Backfill ${{ github.event.client_payload.node }}
+        env:
+          ERCOT_API_USERNAME: ${{ secrets.ERCOT_API_USERNAME }}
+          ERCOT_API_PASSWORD: ${{ secrets.ERCOT_API_PASSWORD }}
+          ERCOT_SUBSCRIPTION_KEY: ${{ secrets.ERCOT_SUBSCRIPTION_KEY }}
+        run: |
+          python pipeline/backfill_node.py \
+            --node "${{ github.event.client_payload.node }}" \
+            --config configs/internal.yaml
+
+      - name: Commit backfilled node data
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add dashboard/data/nodes/
+          if git diff --staged --quiet; then
+            echo "No changes to commit (node had no data, or was already up to date)"
+          else
+            git commit -m "Backfill node: ${{ github.event.client_payload.node }}"
+            git pull --rebase --autostash
+            git push
+          fi
