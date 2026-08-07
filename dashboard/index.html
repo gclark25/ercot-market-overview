@@ -42,7 +42,10 @@
       <div class="node-search">
         <label for="hubSelect">Reference point:</label>
         <select id="hubSelect"></select>
-        <input type="text" id="nodeSearchInput" placeholder="...or search any ERCOT node" />
+        <div class="search-input-wrap">
+          <input type="text" id="nodeSearchInput" placeholder="...or search any ERCOT node" autocomplete="off" />
+          <div class="search-suggestions" id="nodeSearchSuggestions"></div>
+        </div>
         <button id="nodeSearchBtn">Search</button>
         <span id="nodeSearchStatus"></span>
       </div>
@@ -75,6 +78,7 @@
     </section>
   </main>
 
+  <script src="assets/known-locations.js"></script>
   <script src="assets/app.js"></script>
 </body>
 </html>

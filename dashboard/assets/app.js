@@ -418,42 +418,99 @@ function avgField(hoursObj, field) {
   return vals.reduce((a, b) => a + b, 0) / vals.length;
 }
 
-// ── Tab 2: Node search ───────────────────────────────────────────────────────
+// ── Tab 2: Node search + autocomplete ────────────────────────────────────────
 
-document.getElementById("nodeSearchBtn")?.addEventListener("click", async () => {
-  const raw = document.getElementById("nodeSearchInput").value.trim();
+async function resolveAndRenderLocation(query) {
   const status = document.getElementById("nodeSearchStatus");
-  if (!raw) return;
+  if (!query) return;
 
   const knownPoints = [...Object.keys(REPORT_DATA?.hub_prices || {}), ...Object.keys(REPORT_DATA?.load_zone_prices || {})];
-  const match = knownPoints.find((h) => {
+  const bareMatch = knownPoints.find((h) => {
     const bare = h.replace(/^(HB_|LZ_)/, "").toLowerCase();
-    return h.toLowerCase() === raw.toLowerCase() || bare === raw.toLowerCase();
+    return h.toLowerCase() === query.toLowerCase() || bare === query.toLowerCase();
   });
+  const exactCode = query.toUpperCase();
+  const match = bareMatch || (getPointSeries(exactCode) ? exactCode : null);
+
   if (match) {
     document.getElementById("hubSelect").value = match;
     renderReferencePoint(match);
-    status.textContent = "";
+    if (status) status.textContent = "";
     return;
   }
 
-  // Not a hub or load zone already in the daily pull — live per-node lookup
-  // via the Cloudflare Function. Cache the result so switching away and back
-  // (or the basis panel's cross-reference) doesn't re-fetch.
-  status.textContent = "Looking up…";
+  // Not a hub or load zone already in the daily pull (and not a previously
+  // cached live lookup) — go to the live per-node Function. Works both for
+  // a curated-list code (e.g. LZ_AEN, clicked from a suggestion) and for
+  // arbitrary free-text ERCOT settlement point codes typed directly.
+  if (status) status.textContent = "Looking up…";
   try {
-    const res = await fetch(`/node-lookup?node=${encodeURIComponent(raw)}`);
+    const res = await fetch(`/node-lookup?node=${encodeURIComponent(query)}`);
     const result = await res.json();
     if (!res.ok) throw new Error(result.error || `Lookup failed (${res.status})`);
 
     LIVE_NODE_CACHE[result.node] = result.days;
-    status.textContent = `Showing live lookup for ${result.node} (not in the daily pull — fetched just now)`;
+    if (status) status.textContent = `Showing live lookup for ${result.node} (not in the daily pull — fetched just now)`;
     renderReferencePoint(result.node);
   } catch (err) {
-    status.textContent = err.message || "Lookup failed.";
+    if (status) status.textContent = err.message || "Lookup failed.";
     console.error(err);
   }
+}
+
+document.getElementById("nodeSearchBtn")?.addEventListener("click", () => {
+  const raw = document.getElementById("nodeSearchInput").value.trim();
+  hideLocationSuggestions();
+  if (raw) resolveAndRenderLocation(raw);
 });
+
+const nodeSearchInput = document.getElementById("nodeSearchInput");
+const nodeSearchSuggestions = document.getElementById("nodeSearchSuggestions");
+
+nodeSearchInput?.addEventListener("input", () => {
+  const suggestions = typeof getLocationSuggestions === "function" ? getLocationSuggestions(nodeSearchInput.value) : [];
+  renderLocationSuggestions(suggestions);
+});
+
+nodeSearchInput?.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    document.getElementById("nodeSearchBtn").click();
+  } else if (e.key === "Escape") {
+    hideLocationSuggestions();
+  }
+});
+
+nodeSearchSuggestions?.addEventListener("click", (e) => {
+  const item = e.target.closest(".suggestion-item");
+  if (!item) return;
+  const code = item.dataset.code;
+  nodeSearchInput.value = "";
+  hideLocationSuggestions();
+  resolveAndRenderLocation(code);
+});
+
+document.addEventListener("click", (e) => {
+  if (!e.target.closest(".search-input-wrap")) hideLocationSuggestions();
+});
+
+function renderLocationSuggestions(list) {
+  if (!nodeSearchSuggestions) return;
+  if (!list || list.length === 0) {
+    hideLocationSuggestions();
+    return;
+  }
+  nodeSearchSuggestions.innerHTML = list
+    .map((entry) => `<div class="suggestion-item" data-code="${entry.code}"><span>${entry.name}</span><span class="null-value">${entry.code}</span></div>`)
+    .join("");
+  nodeSearchSuggestions.classList.add("visible");
+}
+
+function hideLocationSuggestions() {
+  if (!nodeSearchSuggestions) return;
+  nodeSearchSuggestions.innerHTML = "";
+  nodeSearchSuggestions.classList.remove("visible");
+}
 
 // ── Tab 2: Ancillary services section (segmented service selector + chart) ──
 

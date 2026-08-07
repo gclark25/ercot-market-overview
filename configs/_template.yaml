@@ -41,6 +41,12 @@ data_scope:
     - HB_WEST
     - HB_BUSAVG
   load_zones: []                             # e.g. ["LZ_HOUSTON", "LZ_NORTH", "LZ_SOUTH", "LZ_WEST"] — pulled the same way as hubs, shown as additional reference points on Tab 2. Leave empty to skip.
+  # ERCOT's full nodal load zone list is 8 zones: LZ_HOUSTON, LZ_NORTH, LZ_SOUTH,
+  # LZ_WEST (the 4 mirroring hub regions) plus LZ_AEN, LZ_CPS, LZ_LCRA, LZ_RAYBN
+  # (smaller municipal utility zones — Austin Energy, CPS Energy/San Antonio,
+  # LCRA, Rayburn). Only the first 4 are typically worth the daily YTD pull
+  # cost; the other 4 are still searchable via the live node-lookup Function
+  # (see dashboard/assets/known-locations.js) without needing to be listed here.
   featured_nodes: []                         # e.g. ["ACME_BESS1_UNIT1"] — optional, leave empty if not applicable
 
 # --- Peak convention ---------------------------------------------------------

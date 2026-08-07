@@ -266,6 +266,45 @@ h2:first-child { margin-top: 0; }
 .node-search input {
   flex: 1;
   min-width: 220px;
+  width: 100%;
+}
+
+.search-input-wrap {
+  position: relative;
+  flex: 1;
+  min-width: 220px;
+}
+
+.search-suggestions {
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: var(--surface);
+  border: 1px solid var(--surface-border);
+  border-radius: 4px;
+  margin-top: 2px;
+  z-index: 10;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.search-suggestions.visible {
+  display: block;
+}
+
+.suggestion-item {
+  padding: 0.5rem 0.7rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.suggestion-item:hover {
+  background: rgba(255, 255, 255, 0.05);
 }
 
 .node-search button {
