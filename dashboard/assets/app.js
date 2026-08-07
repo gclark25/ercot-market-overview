@@ -62,7 +62,7 @@ function formatTimestamp(iso) {
   if (isNaN(d.getTime())) return "";
   return d.toLocaleString("en-US", {
     month: "short", day: "numeric", year: "numeric",
-    hour: "numeric", minute: "2-digit", timeZone: "UTC", timeZoneName: "short",
+    hour: "numeric", minute: "2-digit", timeZone: "America/Chicago", timeZoneName: "short",
   });
 }
 
