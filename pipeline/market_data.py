@@ -369,6 +369,7 @@ def get_as_prices(creds: ErcotCredentials, token: str, start: str, end: str) -> 
     all_days = sorted(set(da) | set(rt))
     out: dict[str, dict] = {at: {} for at in AS_TYPES}
     for d in all_days:
+        d_date = datetime.strptime(d, "%Y-%m-%d").date()
         hours = sorted(set(da.get(d, {})) | set(rt.get(d, {})))
         for hr in hours:
             da_prices = da.get(d, {}).get(hr, {})
@@ -382,6 +383,7 @@ def get_as_prices(creds: ErcotCredentials, token: str, start: str, end: str) -> 
                     "da": dv,
                     "rt": rv,
                     "dart": round(dv - rv, 2) if dv is not None and rv is not None else None,
+                    "peak": peak_label(d_date, hr),
                 }
     return out
 

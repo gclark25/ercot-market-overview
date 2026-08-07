@@ -204,34 +204,45 @@ h2:first-child { margin-top: 0; }
   text-align: right;
 }
 
-/* ── Heatmap strips (hourly DART, compact) ── */
-.heatmap-strip-wrap {
-  margin-bottom: 0.5rem;
+.chart-container--sm {
+  height: 260px;
 }
 
-.heatmap-strip-label {
+/* ── On/off-peak summary row (below the hourly time-series charts) ── */
+.peak-summary {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+  margin: 0.75rem 0 1.75rem;
+}
+
+.peak-summary-card {
+  background: var(--surface);
+  border: 1px solid var(--surface-border);
+  border-radius: 6px;
+  padding: 0.7rem 0.9rem;
+}
+
+.peak-summary-card .peak-summary-title {
   font-size: 0.78rem;
-  color: var(--text-secondary);
-  margin-bottom: 0.25rem;
+  font-weight: 600;
+  margin-bottom: 0.4rem;
+}
+
+.peak-summary-card.on .peak-summary-title { color: var(--accent-tertiary); }
+.peak-summary-card.off .peak-summary-title { color: var(--accent-secondary); }
+
+.peak-summary-metrics {
   display: flex;
   justify-content: space-between;
+  font-size: 0.82rem;
+  color: var(--text-secondary);
 }
 
-.heatmap-strip {
-  display: grid;
-  grid-template-columns: repeat(24, 1fr);
-  gap: 2px;
-  cursor: pointer;
-}
-
-.heatmap-cell {
-  height: 28px;
-  border-radius: 2px;
-}
-
-.heatmap-strip.selected {
-  outline: 1px solid var(--accent-primary);
-  outline-offset: 2px;
+.peak-summary-metrics strong {
+  color: var(--text-primary);
+  display: block;
+  font-size: 0.95rem;
 }
 
 /* ── Reference point selector + search ── */
@@ -264,52 +275,6 @@ h2:first-child { margin-top: 0; }
   padding: 0.4rem 0.8rem;
   cursor: pointer;
   font-size: 0.85rem;
-}
-
-/* ── Tables: tightened for scanning, not just data dumps ── */
-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.82rem;
-}
-
-th, td {
-  border-bottom: 1px solid var(--surface-border);
-  padding: 0.3rem 0.5rem;
-  text-align: right;
-}
-
-th {
-  color: var(--text-secondary);
-  font-weight: 500;
-  font-size: 0.75rem;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-}
-
-th:first-child, td:first-child {
-  text-align: left;
-}
-
-tbody tr:nth-child(even) {
-  background: rgba(255, 255, 255, 0.02);
-}
-
-.table-scroll {
-  max-height: 420px;
-  overflow-y: auto;
-  border: 1px solid var(--surface-border);
-  border-radius: 4px;
-  margin-bottom: 1.5rem;
-}
-
-.table-scroll table { margin-bottom: 0; }
-
-.table-scroll thead th {
-  position: sticky;
-  top: 0;
-  background: var(--surface);
-  z-index: 1;
 }
 
 .peak-on { color: var(--accent-tertiary); }

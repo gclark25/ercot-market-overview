@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>ERCOT Market Overview</title>
   <link rel="stylesheet" href="assets/styles.css" />
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.js"></script>
 </head>
 <body>
   <header class="app-header">
@@ -53,31 +53,19 @@
         <div id="basisPanelRows"></div>
       </div>
 
-      <h2>Energy DART — HE 1-24</h2>
-      <div class="heatmap-strip-wrap">
-        <div class="heatmap-strip-label"><span>HE1</span><span>HE24</span></div>
-        <div class="heatmap-strip" id="hourlyDartHeatmap"></div>
+      <h2>Energy — HE 1-24</h2>
+      <div class="chart-container chart-container--sm">
+        <canvas id="energyHourlyChart"></canvas>
       </div>
-      <div class="table-scroll">
-        <table id="hourlyPriceTable">
-          <thead>
-            <tr><th>HE</th><th>Peak</th><th>DA</th><th>RT</th><th>DART</th></tr>
-          </thead>
-          <tbody><!-- each hour already carries a "peak": "on"|"off" tag from market_data.py --></tbody>
-        </table>
-      </div>
+      <div class="peak-summary" id="energyPeakSummary"></div>
 
-      <h2>Ancillary Services DART — HE 1-24</h2>
+      <h2>Ancillary Services — HE 1-24</h2>
       <p class="report-date" id="asPriceDate"></p>
-      <div id="asHeatmapStrips"><!-- one strip per service, populated by app.js --></div>
-      <div class="table-scroll">
-        <table id="asPriceTable">
-          <thead>
-            <tr><th>HE</th><th>Service</th><th>DA</th><th>RT</th><th>DART</th></tr>
-          </thead>
-          <tbody></tbody>
-        </table>
+      <div class="segmented-control" id="asTypeSelector"></div>
+      <div class="chart-container chart-container--sm">
+        <canvas id="asHourlyChart"></canvas>
       </div>
+      <div class="peak-summary" id="asPeakSummary"></div>
     </section>
 
     <section id="tab-intelligence" class="tab-panel">

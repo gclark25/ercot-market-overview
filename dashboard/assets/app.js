@@ -44,10 +44,6 @@ function dartClass(v) {
   return v >= 0 ? "dart-positive" : "dart-negative";
 }
 
-function peakLabel(p) {
-  return p === "on" ? "On" : p === "off" ? "Off" : "—";
-}
-
 function prettifyPoint(key) {
   if (!key) return "";
   if (key === "HB_BUSAVG") return "Bus Average";
@@ -98,15 +94,37 @@ function buildNetLoadSeries(netLoad) {
   return { points, boundaryIndex };
 }
 
+function setChartVisible(canvas, visible, message) {
+  if (!canvas) return;
+  canvas.style.display = visible ? "" : "none";
+  let msgEl = canvas.parentElement.querySelector(".chart-empty-message");
+  if (!visible) {
+    if (!msgEl) {
+      msgEl = document.createElement("p");
+      msgEl.className = "report-date chart-empty-message";
+      canvas.parentElement.appendChild(msgEl);
+    }
+    msgEl.textContent = message;
+  } else if (msgEl) {
+    msgEl.remove();
+  }
+}
+
 function renderNetLoadChart(netLoad) {
   const canvas = document.getElementById("netLoadChart");
-  if (!canvas || typeof Chart === "undefined") return;
+  if (!canvas) return;
+  if (typeof Chart === "undefined") {
+    setChartVisible(canvas, false, "Chart library failed to load — check the browser console and the Chart.js <script> tag in index.html.");
+    console.error("Chart.js did not load — window.Chart is undefined.");
+    return;
+  }
 
   const { points, boundaryIndex } = buildNetLoadSeries(netLoad);
   if (points.length === 0) {
-    canvas.parentElement.innerHTML = '<p class="report-date">No net load data available for this report.</p>';
+    setChartVisible(canvas, false, "No net load data available for this report.");
     return;
   }
+  setChartVisible(canvas, true);
 
   const labels = points.map((p) => `${p.day.slice(5)} HE${p.he}`);
   const series = (key) => points.map((p) => (p[key] === undefined ? null : p[key]));
@@ -253,68 +271,105 @@ function getPointSeries(key) {
 }
 
 function renderReferencePoint(key) {
-  renderHourlyPriceTable(key);
+  renderEnergySection(key);
   renderBasisPanel(key);
 }
 
 document.getElementById("hubSelect")?.addEventListener("change", (e) => renderReferencePoint(e.target.value));
 
-// ── Tab 2: Hourly energy price table + heatmap ──────────────────────────────
+// ── Shared: hourly time-series chart (DA/RT lines + DART bars) ──────────────
 
-function renderHourlyPriceTable(key) {
-  const tbody = document.querySelector("#hourlyPriceTable tbody");
+function renderHourlyTimeSeriesChart(canvas, existingChart, hoursObj) {
+  if (existingChart) existingChart.destroy();
+  if (!canvas || typeof Chart === "undefined" || !hoursObj) return null;
+
+  const heList = Object.keys(hoursObj).sort((a, b) => Number(a) - Number(b));
+  const labels = heList.map((he) => `HE${he}`);
+  const da = heList.map((he) => (hoursObj[he].da ?? null));
+  const rt = heList.map((he) => (hoursObj[he].rt ?? null));
+  const dart = heList.map((he) => (hoursObj[he].dart ?? null));
+  const dartColors = dart.map((v) => (v === null ? "#333" : v >= 0 ? `rgba(${SAGE_RGB},0.55)` : `rgba(${CLAY_RGB},0.55)`));
+
+  return new Chart(canvas, {
+    data: {
+      labels,
+      datasets: [
+        { type: "bar", label: "DART", data: dart, backgroundColor: dartColors, order: 2 },
+        { type: "line", label: "DA", data: da, borderColor: "#c9a24b", borderWidth: 2, pointRadius: 0, order: 1 },
+        { type: "line", label: "RT", data: rt, borderColor: "#f4f1ea", borderWidth: 1.5, pointRadius: 0, order: 1 },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: "index", intersect: false },
+      scales: {
+        x: { ticks: { color: "#9a958a" }, grid: { color: "#2a2a2a" } },
+        y: { title: { display: true, text: "$/MWh", color: "#9a958a" }, ticks: { color: "#9a958a" }, grid: { color: "#2a2a2a" } },
+      },
+      plugins: { legend: { labels: { color: "#f4f1ea" } } },
+    },
+  });
+}
+
+function avgOf(arr, field) {
+  const vals = arr.map((h) => h[field]).filter((v) => v !== null && v !== undefined);
+  if (vals.length === 0) return null;
+  return vals.reduce((a, b) => a + b, 0) / vals.length;
+}
+
+function renderPeakSummary(containerId, hoursObj) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  if (!hoursObj) { el.innerHTML = ""; return; }
+
+  const all = Object.values(hoursObj);
+  const on = all.filter((h) => h.peak === "on");
+  const off = all.filter((h) => h.peak === "off");
+  const summarize = (arr) => ({ da: avgOf(arr, "da"), rt: avgOf(arr, "rt"), dart: avgOf(arr, "dart"), count: arr.length });
+  const onS = summarize(on);
+  const offS = summarize(off);
+
+  el.innerHTML = `
+    <div class="peak-summary-card on">
+      <div class="peak-summary-title">On-Peak (${onS.count}h)</div>
+      <div class="peak-summary-metrics">
+        <div>DA<strong>${fmtMoney(onS.da)}</strong></div>
+        <div>RT<strong>${fmtMoney(onS.rt)}</strong></div>
+        <div>DART<strong class="${dartClass(onS.dart)}">${fmtSignedMoney(onS.dart)}</strong></div>
+      </div>
+    </div>
+    <div class="peak-summary-card off">
+      <div class="peak-summary-title">Off-Peak (${offS.count}h)</div>
+      <div class="peak-summary-metrics">
+        <div>DA<strong>${fmtMoney(offS.da)}</strong></div>
+        <div>RT<strong>${fmtMoney(offS.rt)}</strong></div>
+        <div>DART<strong class="${dartClass(offS.dart)}">${fmtSignedMoney(offS.dart)}</strong></div>
+      </div>
+    </div>
+  `;
+}
+
+// ── Tab 2: Energy section (reference point's most recent day) ───────────────
+
+let energyChart = null;
+
+function renderEnergySection(key) {
   const dateLabel = document.getElementById("hourlyPriceDate");
-  const heatmap = document.getElementById("hourlyDartHeatmap");
-  if (!tbody) return;
-  tbody.innerHTML = "";
-  if (heatmap) heatmap.innerHTML = "";
-
+  const canvas = document.getElementById("energyHourlyChart");
   const days = getPointSeries(key);
   const day = latestDateKey(days);
+
   if (!day) {
-    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--text-secondary);padding:16px">No price data for this node.</td></tr>`;
     if (dateLabel) dateLabel.textContent = "";
+    setChartVisible(canvas, false, "No price data for this node.");
+    renderPeakSummary("energyPeakSummary", null);
     return;
   }
   if (dateLabel) dateLabel.textContent = `${prettifyPoint(key)} — most recent available day: ${day}`;
-
-  const hours = days[day];
-  const cells = [];
-  for (const he of Object.keys(hours).sort((a, b) => Number(a) - Number(b))) {
-    const h = hours[he];
-    cells.push({ value: h.dart, title: `HE${he}: ${fmtSignedMoney(h.dart)}` });
-
-    const tr = document.createElement("tr");
-    tr.className = h.peak === "on" ? "peak-on" : "peak-off";
-    tr.innerHTML = `
-      <td>HE${he}</td>
-      <td>${peakLabel(h.peak)}</td>
-      <td>${fmtMoney(h.da)}</td>
-      <td>${fmtMoney(h.rt)}</td>
-      <td class="${dartClass(h.dart)}">${fmtMoney(h.dart)}</td>
-    `;
-    tbody.appendChild(tr);
-  }
-  if (heatmap) renderHeatmapCells(heatmap, cells);
-}
-
-function renderHeatmapCells(container, cells) {
-  container.innerHTML = "";
-  const maxAbs = Math.max(1, ...cells.map((c) => Math.abs(c.value ?? 0)));
-  for (const c of cells) {
-    const div = document.createElement("div");
-    div.className = "heatmap-cell";
-    if (c.value === null || c.value === undefined) {
-      div.style.background = "#232323";
-    } else {
-      const intensity = Math.min(1, Math.abs(c.value) / maxAbs);
-      const alpha = 0.15 + intensity * 0.75;
-      const color = c.value >= 0 ? SAGE_RGB : CLAY_RGB;
-      div.style.background = `rgba(${color},${alpha.toFixed(2)})`;
-    }
-    div.title = c.title;
-    container.appendChild(div);
-  }
+  setChartVisible(canvas, true);
+  energyChart = renderHourlyTimeSeriesChart(canvas, energyChart, days[day]);
+  renderPeakSummary("energyPeakSummary", days[day]);
 }
 
 // ── Tab 2: Basis panel (node price - hub price, per hub) ────────────────────
@@ -392,85 +447,63 @@ document.getElementById("nodeSearchBtn")?.addEventListener("click", async () => 
     if (!res.ok) throw new Error(`Lookup failed (${res.status})`);
     const result = await res.json();
     status.textContent = "";
-    console.log("Node lookup result:", result); // TODO: render into hourlyPriceTable + basisPanel once node-lookup.js is real
+    console.log("Node lookup result:", result); // TODO: render into the energy chart + basisPanel once node-lookup.js is real
   } catch (err) {
     status.textContent = "Lookup failed — that node isn't in the daily pull yet. Try a hub or load zone from the dropdown.";
     console.error(err);
   }
 });
 
-// ── Tab 2: Ancillary services heatmap strips + table ────────────────────────
+// ── Tab 2: Ancillary services section (segmented service selector + chart) ──
 
-function renderAsSection(asPrices) {
-  const stripsContainer = document.getElementById("asHeatmapStrips");
-  const dateLabel = document.getElementById("asPriceDate");
-  if (!stripsContainer) return;
-  stripsContainer.innerHTML = "";
+let asChart = null;
+
+function populateAsTypeSelector(asPrices) {
+  const selector = document.getElementById("asTypeSelector");
+  if (!selector) return;
+  selector.innerHTML = "";
 
   const types = AS_TYPE_ORDER.filter((t) => asPrices?.[t]);
-  if (types.length === 0) {
-    if (dateLabel) dateLabel.textContent = "";
-    document.querySelector("#asPriceTable tbody").innerHTML =
-      `<tr><td colspan="5" style="text-align:center;color:var(--text-secondary);padding:16px">No ancillary services data available.</td></tr>`;
-    return;
-  }
-
-  const day = types.map((t) => latestDateKey(asPrices[t])).filter(Boolean).sort().slice(-1)[0];
-  if (dateLabel) dateLabel.textContent = day ? `Most recent available day: ${day} — click a strip to see exact hourly values` : "";
+  currentAsType = currentAsType && types.includes(currentAsType) ? currentAsType : (types[0] || null);
 
   for (const type of types) {
-    const hours = asPrices[type]?.[day] || {};
-    const wrap = document.createElement("div");
-    wrap.className = "heatmap-strip-wrap";
-    wrap.innerHTML = `<div class="heatmap-strip-label"><span>${AS_TYPE_LABELS[type]}</span></div>`;
-    const strip = document.createElement("div");
-    strip.className = "heatmap-strip";
-    strip.dataset.asType = type;
-    if (type === currentAsType) strip.classList.add("selected");
-
-    const cells = [];
-    for (let he = 1; he <= 24; he++) {
-      const h = hours[String(he)];
-      cells.push({ value: h?.dart ?? null, title: `HE${he}: ${h ? fmtSignedMoney(h.dart) : "no data"}` });
-    }
-    renderHeatmapCells(strip, cells);
-    strip.addEventListener("click", () => {
+    const btn = document.createElement("button");
+    btn.textContent = AS_TYPE_LABELS[type] || type;
+    btn.dataset.asType = type;
+    if (type === currentAsType) btn.classList.add("active");
+    btn.addEventListener("click", () => {
       currentAsType = type;
-      document.querySelectorAll("#asHeatmapStrips .heatmap-strip").forEach((s) => s.classList.remove("selected"));
-      strip.classList.add("selected");
-      renderAsPriceTableForType(asPrices, type, day);
+      selector.querySelectorAll("button").forEach((b) => b.classList.remove("active"));
+      btn.classList.add("active");
+      renderAsSection(asPrices);
     });
-
-    wrap.appendChild(strip);
-    stripsContainer.appendChild(wrap);
+    selector.appendChild(btn);
   }
-
-  currentAsType = currentAsType && types.includes(currentAsType) ? currentAsType : types[0];
-  document.querySelector(`#asHeatmapStrips .heatmap-strip[data-as-type="${currentAsType}"]`)?.classList.add("selected");
-  renderAsPriceTableForType(asPrices, currentAsType, day);
 }
 
-function renderAsPriceTableForType(asPrices, type, day) {
-  const tbody = document.querySelector("#asPriceTable tbody");
-  if (!tbody) return;
-  tbody.innerHTML = "";
-  const hours = asPrices?.[type]?.[day];
-  if (!hours) {
-    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--text-secondary);padding:16px">No data for ${AS_TYPE_LABELS[type] || type} on ${day}.</td></tr>`;
+function renderAsSection(asPrices) {
+  const dateLabel = document.getElementById("asPriceDate");
+  const canvas = document.getElementById("asHourlyChart");
+
+  const types = AS_TYPE_ORDER.filter((t) => asPrices?.[t]);
+  if (types.length === 0 || !currentAsType) {
+    if (dateLabel) dateLabel.textContent = "";
+    setChartVisible(canvas, false, "No ancillary services data available.");
+    renderPeakSummary("asPeakSummary", null);
     return;
   }
-  for (const he of Object.keys(hours).sort((a, b) => Number(a) - Number(b))) {
-    const h = hours[he];
-    const tr = document.createElement("tr");
-    tr.innerHTML = `
-      <td>HE${he}</td>
-      <td>${AS_TYPE_LABELS[type] || type}</td>
-      <td>${fmtMoney(h.da)}</td>
-      <td>${fmtMoney(h.rt)}</td>
-      <td class="${dartClass(h.dart)}">${fmtMoney(h.dart)}</td>
-    `;
-    tbody.appendChild(tr);
+
+  const day = latestDateKey(asPrices[currentAsType]);
+  if (!day) {
+    setChartVisible(canvas, false, `No data for ${AS_TYPE_LABELS[currentAsType] || currentAsType}.`);
+    renderPeakSummary("asPeakSummary", null);
+    return;
   }
+  if (dateLabel) dateLabel.textContent = `Most recent available day: ${day}`;
+  setChartVisible(canvas, true);
+  const hours = asPrices[currentAsType][day];
+  asChart = renderHourlyTimeSeriesChart(canvas, asChart, hours);
+  renderPeakSummary("asPeakSummary", hours);
 }
 
 // ── Tab 3: AI recap ──────────────────────────────────────────────────────────
@@ -504,6 +537,7 @@ async function loadReport() {
     renderHubCards(REPORT_DATA.hub_windows);
     populateHubSelect();
     renderReferencePoint(document.getElementById("hubSelect")?.value);
+    populateAsTypeSelector(REPORT_DATA.as_prices);
     renderAsSection(REPORT_DATA.as_prices);
     renderAiRecap(REPORT_DATA.ai_recap, REPORT_DATA.generated_at);
   } catch (err) {
