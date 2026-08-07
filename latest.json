@@ -1,0 +1,42 @@
+customer_id: internal
+display_name: "HEN — ERCOT Market Overview"
+
+branding:
+  product_name: "ERCOT Market Overview"
+  logo_url: null
+  palette:
+    background: "#0d0f0f"
+    accent_primary: "#c9a24b"
+    accent_secondary: "#7c9885"
+    accent_tertiary: "#b5654a"
+    text_primary: "#f4f1ea"
+    text_secondary: "#9a958a"
+
+deployment:
+  cloudflare_project_name: "hen-market-overview"
+  custom_domain: null
+
+data_scope:
+  hubs:
+    - HB_HOUSTON
+    - HB_NORTH
+    - HB_SOUTH
+    - HB_WEST
+    - HB_BUSAVG
+  featured_nodes: []   # internal view stays market-wide; HEN's asset-level detail lives in hen-morning-report
+
+features:
+  net_load_overview: true
+  hub_dart_table: true
+  hourly_price_table: true
+  ancillary_services_table: true
+  node_search: true
+  ai_narrative: true
+  modo_dependent_features: false   # off here too — this repo is the shared base for internal + third-party, kept Modo-free throughout
+
+secrets:
+  ercot_api_user_secret: ERCOT_API_USERNAME
+  ercot_api_pass_secret: ERCOT_API_PASSWORD
+  ercot_subscription_key_secret: ERCOT_SUBSCRIPTION_KEY
+  cloudflare_api_token_secret: CLOUDFLARE_API_TOKEN
+  claude_api_key_secret: ANTHROPIC_API_KEY

@@ -1,0 +1,64 @@
+# customer_config.yaml schema
+# Copy this file to configs/<name>.yaml to onboard a new deployment (internal or
+# third-party). The GitHub Actions matrix build discovers every *.yaml in configs/
+# except this template and builds/deploys one per file.
+
+# Unique identifier — used as the matrix job name and in log output. Lowercase,
+# hyphenated, no spaces.
+customer_id: acme-energy
+
+# Display name shown in the dashboard header and AI narrative.
+display_name: "Acme Energy"
+
+# --- Branding ------------------------------------------------------------
+# Everything here maps to CSS variables in dashboard/assets/styles.css.
+# Leave as defaults for internal/unbranded use.
+branding:
+  product_name: "ERCOT Market Overview"     # header title
+  logo_url: null                             # null = text wordmark, or a hosted image URL
+  palette:
+    background: "#0d0f0f"
+    accent_primary: "#c9a24b"                # gold
+    accent_secondary: "#7c9885"               # sage
+    accent_tertiary: "#b5654a"                # clay
+    text_primary: "#f4f1ea"
+    text_secondary: "#9a958a"
+
+# --- Deployment ------------------------------------------------------------
+deployment:
+  cloudflare_project_name: "acme-energy-market-overview"
+  custom_domain: null                        # e.g. dashboard.acmeenergy.com, or null to use the *.pages.dev default
+
+# --- Data scope ------------------------------------------------------------
+# Market-wide data (hubs, load zones, AS) is always included — it doesn't depend
+# on this list. `featured_nodes` is only for anything asset-specific this
+# customer wants pinned/highlighted outside of the live search box (optional).
+data_scope:
+  hubs:
+    - HB_HOUSTON
+    - HB_NORTH
+    - HB_SOUTH
+    - HB_WEST
+    - HB_BUSAVG
+  featured_nodes: []                         # e.g. ["ACME_BESS1_UNIT1"] — optional, leave empty if not applicable
+
+# --- Feature flags -----------------------------------------------------------
+features:
+  net_load_overview: true                    # Tab 1
+  hub_dart_table: true                        # Tab 1
+  hourly_price_table: true                    # Tab 2
+  ancillary_services_table: true              # Tab 2
+  node_search: true                           # Tab 2 — requires functions/node-lookup.js deployed
+  ai_narrative: true                           # Tab 3
+  modo_dependent_features: false              # keep false for any third-party config — Modo Energy data is internal-only
+
+# --- Secrets ------------------------------------------------------------
+# Names of GitHub secrets to inject at build time, NOT the secret values
+# themselves. Same secret can be reused across configs (e.g. one shared ERCOT
+# API credential) or scoped per customer if they bring their own.
+secrets:
+  ercot_api_user_secret: ERCOT_API_USERNAME
+  ercot_api_pass_secret: ERCOT_API_PASSWORD
+  ercot_subscription_key_secret: ERCOT_SUBSCRIPTION_KEY
+  cloudflare_api_token_secret: CLOUDFLARE_API_TOKEN
+  claude_api_key_secret: ANTHROPIC_API_KEY
