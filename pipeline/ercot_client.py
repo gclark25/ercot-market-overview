@@ -29,6 +29,11 @@ from urllib.parse import quote
 import requests
 
 BASE_URL = "https://api.ercot.com/api/public-reports"
+PAGE_PACING_SECONDS = 2  # delay between successive pages during pagination — ERCOT's
+                          # rate limit tripped (429) when pages fired back-to-back with
+                          # no delay at all; the original single-day pulls never hit this
+                          # because they never paginated.
+DEFAULT_429_BACKOFF_SECONDS = 20
 AUTH_URL = (
     "https://ercotb2c.b2clogin.com"
     "/ercotb2c.onmicrosoft.com"
@@ -69,6 +74,35 @@ def get_ercot_token(creds: ErcotCredentials) -> str:
     return token
 
 
+def _get_json_with_retry(path: str, headers: dict, params: dict, max_attempts: int = 3) -> dict:
+    """
+    Single-page GET with retry logic that treats 429 (rate limited) differently
+    from other transient errors: honors the Retry-After header when present,
+    and falls back to a longer fixed backoff than the generic retry uses,
+    since a 10s wait was not enough to clear ERCOT's rate limit in practice.
+    """
+    last_exc = None
+    for attempt in range(max_attempts):
+        try:
+            r = requests.get(f"{BASE_URL}/{path}", headers=headers, params=params, timeout=45)
+            if r.status_code == 429:
+                retry_after = r.headers.get("Retry-After")
+                wait = float(retry_after) if retry_after else DEFAULT_429_BACKOFF_SECONDS
+                if attempt < max_attempts - 1:
+                    print(f"    WARN: {path} rate limited (429) — waiting {wait:.0f}s before retry...")
+                    time.sleep(wait)
+                    continue
+                r.raise_for_status()  # final attempt: raise the 429 as an error
+            r.raise_for_status()
+            return r.json()
+        except Exception as e:
+            last_exc = e
+            if attempt < max_attempts - 1:
+                print(f"    WARN: {path} attempt {attempt + 1} failed ({e}) — retrying in 10s...")
+                time.sleep(10)
+    raise last_exc
+
+
 def ercot_get_raw(
     path: str,
     token: str,
@@ -77,11 +111,11 @@ def ercot_get_raw(
     paginate: bool = False,
 ) -> list:
     """Positional-access style — mirrors hen_morning_report.ercot_get(), with
-    pagination added on top. The original single-day pulls never needed
-    pagination (a day of RT data is well under one page); YTD-range pulls
-    used elsewhere in this codebase do, so set paginate=True for those or
-    rows past the first page/`size` will silently go missing — no error,
-    just quietly wrong (too-short) history."""
+    pagination (and pacing between pages) added on top. The original
+    single-day pulls never needed pagination (a day of RT data is well under
+    one page); YTD-range pulls used elsewhere in this codebase do, so set
+    paginate=True for those or rows past the first page/`size` will silently
+    go missing — no error, just quietly wrong (too-short) history."""
     headers = {
         "Authorization": f"Bearer {token}",
         "Ocp-Apim-Subscription-Key": creds.subscription_key,
@@ -98,26 +132,21 @@ def ercot_get_raw(
         p = dict(base_params)
         if paginate:
             p["page"] = page
+            if page > 1:
+                time.sleep(PAGE_PACING_SECONDS)
 
-        page_rows: list = []
-        for attempt in range(2):
-            try:
-                r = requests.get(f"{BASE_URL}/{path}", headers=headers, params=p, timeout=45)
-                r.raise_for_status()
-                body = r.json()
-                if isinstance(body, list):
-                    page_rows = body
-                elif "data" in body:
-                    page_rows = body["data"]
-                else:
-                    page_rows = next((v for v in body.values() if isinstance(v, list)), [])
-                break
-            except Exception as e:
-                if attempt == 0:
-                    print(f"    WARN: {path} page {page} attempt 1 failed ({e}) — retrying in 10s...")
-                    time.sleep(10)
-                else:
-                    raise
+        try:
+            body = _get_json_with_retry(path, headers, p)
+        except Exception as e:
+            print(f"    WARN: {path} page {page} — giving up after retries ({e})")
+            break
+
+        if isinstance(body, list):
+            page_rows = body
+        elif "data" in body:
+            page_rows = body["data"]
+        else:
+            page_rows = next((v for v in body.values() if isinstance(v, list)), [])
 
         all_rows.extend(page_rows)
 
@@ -166,12 +195,13 @@ def ercot_get_records(
         p = dict(base_params)
         if paginate:
             p["page"] = page
+            if page > 1:
+                time.sleep(PAGE_PACING_SECONDS)
+
         try:
-            r = requests.get(f"{BASE_URL}/{path}", headers=headers, params=p, timeout=45)
-            r.raise_for_status()
-            body = r.json()
+            body = _get_json_with_retry(path, headers, p)
         except Exception as e:
-            print(f"    WARN [{path}] page {page} — {e}")
+            print(f"    WARN [{path}] page {page} — giving up after retries ({e})")
             break
 
         fields_raw = body.get("fields") or []

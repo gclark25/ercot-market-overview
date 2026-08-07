@@ -10,6 +10,7 @@ docstring for why two request styles exist.
 
 from collections import defaultdict
 from datetime import date, datetime, timedelta
+import time
 from typing import Any
 
 from ercot_client import ErcotCredentials, ercot_get_raw, ercot_get_records
@@ -63,7 +64,7 @@ def _get_net_load_actuals(creds: ErcotCredentials, token: str, start: str, end: 
     # last numeric value in row[1:] as systemTotal (matches collect_data()).
     try:
         rows = ercot_get_raw("np6-345-cd/act_sys_load_by_wzn", token, creds,
-                              {"deliveryDateFrom": start, "deliveryDateTo": end})
+                              {"operatingDayFrom": start, "operatingDayTo": end})
         for row in rows:
             if not isinstance(row, list) or len(row) < 3:
                 continue
@@ -247,7 +248,10 @@ def get_hub_energy_prices(creds: ErcotCredentials, token: str, hubs: list[str], 
     (15-min intervals) needs a larger `size` than DA (hourly).
     """
     out: dict[str, dict] = {}
-    for hub in hubs:
+    for i, hub in enumerate(hubs):
+        if i > 0:
+            time.sleep(3)  # pacing between hubs, matching the original per-node loop
+
         rt_hourly: dict[str, dict[int, float]] = defaultdict(dict)
         da_hourly: dict[str, dict[int, float]] = defaultdict(dict)
 
@@ -266,6 +270,8 @@ def get_hub_energy_prices(creds: ErcotCredentials, token: str, hubs: list[str], 
                     rt_hourly[d][hr] = round(sum(prices) / len(prices), 2)
         except Exception as e:
             print(f"    WARN: RT prices for {hub} — {e}")
+
+        time.sleep(3)  # pacing between the RT and DA pulls for the same hub
 
         try:
             rows = ercot_get_raw("np4-190-cd/dam_stlmnt_pnt_prices", token, creds, {
@@ -347,6 +353,8 @@ def get_as_prices(creds: ErcotCredentials, token: str, start: str, end: str) -> 
     da_rows = ercot_get_records("np4-188-cd/dam_clear_price_for_cap", token, creds,
                                  {"deliveryDateFrom": start, "deliveryDateTo": end}, paginate=True)
     da = _bucket_as_rows(da_rows, start, end)
+
+    time.sleep(3)  # pacing between the two big paginated pulls, not just within each one
 
     rt_rows = ercot_get_records("np6-332-cd/rt_clear_price_cap_sced", token, creds, {
         "SCEDTimestampFrom": start + "T00:00:00", "SCEDTimestampTo": end + "T23:59:59",
