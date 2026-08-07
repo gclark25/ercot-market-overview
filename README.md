@@ -57,9 +57,15 @@ file — no code changes, unless they need a feature the pipeline doesn't have y
 - `ai_narrative.py` — still a stub. `build_report.py` catches its
   `NotImplementedError`/`RuntimeError` so the rest of the report still writes
   successfully in the meantime.
-- `dashboard/` frontend — structural shell only, no real design/rendering yet.
-- `functions/node-lookup.js` — stub, moved under `dashboard/` so Cloudflare
-  Pages picks it up once implemented.
+- `dashboard/` frontend — real rendering: net load chart, hub cards, time-series
+  charts with on/off-peak summaries for energy and AS, basis panel, and search
+  autocomplete for known hubs/load zones (see `dashboard/assets/known-locations.js`).
+- `functions/node-lookup.js` — real implementation: live ERCOT auth + single-day
+  DA/RT/DART lookup for any settlement point, with token + result caching.
+  **Must stay at the repo root** (sibling to `dashboard/`), not nested inside it —
+  Cloudflare Pages looks for `functions/` relative to where the deploy command
+  runs, independent of which directory's static assets get uploaded. This bit
+  us once already; don't move it.
 
 ## On-peak / off-peak
 
@@ -73,6 +79,6 @@ the tag rather than re-deriving the rule.
 
 1. ~~Repo scaffolding + config pattern~~ ← done
 2. ~~Backend pipeline core~~ ← done (`ai_narrative.py` pending)
-3. Frontend (`dashboard/`) — real 3-tab design pass, render real data + on/off-peak breakdown
-4. `functions/node-lookup.js` — live any-node search
-5. `ai_narrative.py` — port the Tab 3 recap prompt/generation
+3. ~~Frontend real rendering pass~~ ← done
+4. ~~`functions/node-lookup.js` — live any-node search~~ ← done
+5. `pipeline/ai_narrative.py` — the Tab 3 AI recap, still a stub
