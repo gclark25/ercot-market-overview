@@ -71,7 +71,9 @@ def build(config: dict) -> dict:
         load_zones = config["data_scope"].get("load_zones") or []
         if load_zones and features.get("hourly_price_table"):
             print(f"Pulling load zone DA/RT prices, {ytd_start} -> {yesterday} ({len(load_zones)} zones)...")
-            output["load_zone_prices"] = get_hub_energy_prices(creds, token, load_zones, ytd_start, yesterday)
+            load_zone_prices = get_hub_energy_prices(creds, token, load_zones, ytd_start, yesterday)
+            output["load_zone_prices"] = load_zone_prices
+            output["load_zone_windows"] = {zone: rollup_all_windows(series, today) for zone, series in load_zone_prices.items()}
 
     if features.get("ancillary_services_table"):
         print(f"Pulling AS DA/RT clearing prices, {ytd_start} -> {yesterday}...")

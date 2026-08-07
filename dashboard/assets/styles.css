@@ -157,6 +157,13 @@ h2:first-child { margin-top: 0; }
   display: block;
 }
 
+.hub-card-tb {
+  margin-top: 0.6rem;
+  margin-bottom: 0;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--surface-border);
+}
+
 .hub-card-spread {
   font-size: 1.1rem;
   font-weight: 700;
@@ -355,3 +362,31 @@ h2:first-child { margin-top: 0; }
 }
 
 .basis-row:last-child { border-bottom: none; }
+
+/* ── TB1/TB2/TB4 comparison grid (Tab 2) ── */
+.tb-grid {
+  display: grid;
+  grid-template-columns: 3rem repeat(4, 1fr);
+  gap: 3px 0.5rem;
+  font-size: 0.82rem;
+  align-items: center;
+}
+
+.tb-header {
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  text-align: right;
+  padding-bottom: 0.3rem;
+  border-bottom: 1px solid var(--surface-border);
+}
+
+.tb-label {
+  color: var(--accent-primary);
+  font-weight: 600;
+}
+
+.tb-value {
+  text-align: right;
+}

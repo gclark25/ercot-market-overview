@@ -29,6 +29,12 @@ class WindowStats(TypedDict):
     overall: PeakStats
     on_peak: PeakStats
     off_peak: PeakStats
+    tb1: float | None       # avg daily (max hourly RT - min hourly RT) / 24, across the window
+    tb1_days: int           # how many days contributed a value (needs >=2 valid RT hours/day)
+    tb2: float | None       # avg daily (sum top-2 RT - sum bottom-2 RT) / 24
+    tb2_days: int           # needs >=4 valid RT hours/day
+    tb4: float | None       # avg daily (sum top-4 RT - sum bottom-4 RT) / 24
+    tb4_days: int           # needs >=8 valid RT hours/day
 
 
 EMPTY_PEAK_STATS: PeakStats = {
@@ -76,6 +82,54 @@ def _compute_peak_stats(hour_records: list[dict]) -> PeakStats:
     }
 
 
+def _daily_tb_values(hours: dict) -> tuple[float | None, float | None, float | None]:
+    """
+    hours: {"HH": {"rt": float|None, ...}} for a single day.
+
+    Each metric needs enough distinct valid (non-null) hourly RT values to
+    fill its top-N and bottom-N without overlap — TB1 needs 2, TB2 needs 4,
+    TB4 needs 8. A metric is independently None for a day that falls short,
+    rather than dropping the whole day from all three just because TB4 (the
+    strictest) can't be computed.
+    """
+    rt_vals = sorted(h["rt"] for h in hours.values() if h.get("rt") is not None)
+    n = len(rt_vals)
+    tb1 = round((rt_vals[-1] - rt_vals[0]) / 24, 3) if n >= 2 else None
+    tb2 = round((sum(rt_vals[-2:]) - sum(rt_vals[:2])) / 24, 3) if n >= 4 else None
+    tb4 = round((sum(rt_vals[-4:]) - sum(rt_vals[:4])) / 24, 3) if n >= 8 else None
+    return tb1, tb2, tb4
+
+
+def _compute_tb_stats(hourly_series: dict, start: date, end: date) -> dict:
+    tb1_vals: list[float] = []
+    tb2_vals: list[float] = []
+    tb4_vals: list[float] = []
+
+    for day_str, hours in hourly_series.items():
+        try:
+            d = date.fromisoformat(day_str)
+        except ValueError:
+            continue
+        if not (start <= d <= end):
+            continue
+        tb1, tb2, tb4 = _daily_tb_values(hours)
+        if tb1 is not None:
+            tb1_vals.append(tb1)
+        if tb2 is not None:
+            tb2_vals.append(tb2)
+        if tb4 is not None:
+            tb4_vals.append(tb4)
+
+    def _avg(vals: list[float]) -> float | None:
+        return round(sum(vals) / len(vals), 3) if vals else None
+
+    return {
+        "tb1": _avg(tb1_vals), "tb1_days": len(tb1_vals),
+        "tb2": _avg(tb2_vals), "tb2_days": len(tb2_vals),
+        "tb4": _avg(tb4_vals), "tb4_days": len(tb4_vals),
+    }
+
+
 def rollup_window(hourly_series: dict, window: str, as_of: date | None = None) -> WindowStats:
     """
     hourly_series: { "YYYY-MM-DD": { "HH": {"da": float|None, "rt": float|None,
@@ -104,10 +158,13 @@ def rollup_window(hourly_series: dict, window: str, as_of: date | None = None) -
             else:
                 off_peak_records.append(hour_data)
 
+    tb_stats = _compute_tb_stats(hourly_series, start, end)
+
     return {
         "overall": _compute_peak_stats(overall_records),
         "on_peak": _compute_peak_stats(on_peak_records),
         "off_peak": _compute_peak_stats(off_peak_records),
+        **tb_stats,
     }
 
 
