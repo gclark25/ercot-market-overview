@@ -220,7 +220,7 @@ function buildHubCard(hub, stats, maxAbsSpread) {
     <div class="hub-card-metrics">
       <div>Avg DA<strong>${fmtMoney(o.avg_da)}</strong></div>
       <div>Avg RT<strong>${fmtMoney(o.avg_rt)}</strong></div>
-      <div>RT Vol.<strong>${fmtNum(o.rt_volatility)}</strong></div>
+      <div>On-Peak RT<strong>${fmtMoney(stats.on_peak?.avg_rt)}</strong></div>
     </div>
     <div class="hub-card-spread ${dartClass(o.dart_spread)}">${fmtSignedMoney(o.dart_spread)} DART</div>
     <div class="peak-bars">
