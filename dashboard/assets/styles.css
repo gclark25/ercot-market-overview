@@ -1,16 +1,20 @@
-/* Placeholder styles only. Real palette/type/layout pass happens in the
-   frontend design task — see README "Build order". These CSS variables are
-   the hook point: build_report.py (or a small build step) should eventually
-   inject each config's branding.palette into :root here per-deployment. */
+/* Design tokens: dark trading-terminal aesthetic, consistent with the
+   Patterson Enterprises / Prairie Dog BESS mockup style established earlier
+   in this product line. Gold = primary metric emphasis, sage = positive/
+   favorable direction, clay = negative/unfavorable direction. */
 
 :root {
   --background: #0d0f0f;
+  --surface: #16181a;
+  --surface-border: #2a2a2a;
   --accent-primary: #c9a24b;
   --accent-secondary: #7c9885;
   --accent-tertiary: #b5654a;
   --text-primary: #f4f1ea;
   --text-secondary: #9a958a;
 }
+
+* { box-sizing: border-box; }
 
 body {
   background: var(--background);
@@ -24,7 +28,12 @@ body {
   justify-content: space-between;
   align-items: baseline;
   padding: 1rem 1.5rem;
-  border-bottom: 1px solid var(--text-secondary);
+  border-bottom: 1px solid var(--surface-border);
+}
+
+.app-header h1 {
+  font-size: 1.4rem;
+  margin: 0;
 }
 
 .tabs {
@@ -35,10 +44,11 @@ body {
 
 .tab-btn {
   background: none;
-  border: 1px solid var(--text-secondary);
+  border: 1px solid var(--surface-border);
   color: var(--text-secondary);
   padding: 0.5rem 1rem;
   cursor: pointer;
+  font-size: 0.9rem;
 }
 
 .tab-btn.active {
@@ -48,29 +58,183 @@ body {
 
 .tab-panel {
   display: none;
-  padding: 1.5rem;
+  padding: 1.25rem 1.5rem 2rem;
+  max-width: 1200px;
 }
 
 .tab-panel.active {
   display: block;
 }
 
-table {
+h2 {
+  font-size: 1.05rem;
+  font-weight: 600;
+  margin: 1.75rem 0 0.6rem;
+  color: var(--text-primary);
+}
+
+h2:first-child { margin-top: 0; }
+
+.report-date {
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  margin: 0.2rem 0 0.75rem;
+}
+
+/* ── Chart container: the actual bug fix — canvas needs a sized parent ── */
+.chart-container {
+  position: relative;
+  height: 320px;
   width: 100%;
-  border-collapse: collapse;
+  margin-bottom: 0.5rem;
+}
+
+.chart-legend-note {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  margin: 0 0 1rem;
+}
+
+/* ── Segmented control (window selector) ── */
+.segmented-control {
+  display: inline-flex;
+  border: 1px solid var(--surface-border);
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 1rem;
+}
+
+.segmented-control button {
+  background: var(--surface);
+  color: var(--text-secondary);
+  border: none;
+  padding: 0.45rem 0.9rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+  border-right: 1px solid var(--surface-border);
+}
+
+.segmented-control button:last-child { border-right: none; }
+
+.segmented-control button.active {
+  background: var(--accent-primary);
+  color: var(--background);
+  font-weight: 600;
+}
+
+/* ── Hub summary cards ── */
+.hub-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 0.75rem;
   margin-bottom: 1.5rem;
 }
 
-th, td {
-  border-bottom: 1px solid var(--text-secondary);
-  padding: 0.4rem 0.6rem;
+.hub-card {
+  background: var(--surface);
+  border: 1px solid var(--surface-border);
+  border-radius: 6px;
+  padding: 0.9rem 1rem;
+}
+
+.hub-card-name {
+  font-weight: 600;
+  font-size: 0.95rem;
+  margin-bottom: 0.5rem;
+}
+
+.hub-card-metrics {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  margin-bottom: 0.6rem;
+}
+
+.hub-card-metrics strong {
+  color: var(--text-primary);
+  font-size: 0.95rem;
+  display: block;
+}
+
+.hub-card-spread {
+  font-size: 1.1rem;
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+}
+
+.peak-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.peak-bar-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+}
+
+.peak-bar-track {
+  flex: 1;
+  height: 10px;
+  background: #232323;
+  border-radius: 2px;
+  position: relative;
+  overflow: hidden;
+}
+
+.peak-bar-fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-radius: 2px;
+}
+
+.peak-bar-label {
+  width: 3.2rem;
+  flex-shrink: 0;
+}
+
+.peak-bar-value {
+  width: 3.6rem;
+  flex-shrink: 0;
   text-align: right;
 }
 
-th:first-child, td:first-child {
-  text-align: left;
+/* ── Heatmap strips (hourly DART, compact) ── */
+.heatmap-strip-wrap {
+  margin-bottom: 0.5rem;
 }
 
+.heatmap-strip-label {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  margin-bottom: 0.25rem;
+  display: flex;
+  justify-content: space-between;
+}
+
+.heatmap-strip {
+  display: grid;
+  grid-template-columns: repeat(24, 1fr);
+  gap: 2px;
+  cursor: pointer;
+}
+
+.heatmap-cell {
+  height: 28px;
+  border-radius: 2px;
+}
+
+.heatmap-strip.selected {
+  outline: 1px solid var(--accent-primary);
+  outline-offset: 2px;
+}
+
+/* ── Reference point selector + search ── */
 .node-search {
   margin-bottom: 0.5rem;
   display: flex;
@@ -81,10 +245,16 @@ th:first-child, td:first-child {
 
 .node-search select,
 .node-search input {
-  background: var(--background);
+  background: var(--surface);
   color: var(--text-primary);
-  border: 1px solid var(--text-secondary);
+  border: 1px solid var(--surface-border);
   padding: 0.4rem 0.6rem;
+  font-size: 0.85rem;
+}
+
+.node-search input {
+  flex: 1;
+  min-width: 220px;
 }
 
 .node-search button {
@@ -93,45 +263,79 @@ th:first-child, td:first-child {
   color: var(--accent-primary);
   padding: 0.4rem 0.8rem;
   cursor: pointer;
-}
-
-.peak-toggle {
-  display: block;
-  margin-bottom: 0.75rem;
-  color: var(--text-secondary);
-  font-size: 0.9rem;
-  cursor: pointer;
-}
-
-tr.peak-detail-row {
-  display: none;
-}
-
-#hubWindowsTable.show-peak-detail tr.peak-detail-row {
-  display: table-row;
-}
-
-tr.peak-on td.peak-cell {
-  color: var(--accent-tertiary);
-}
-
-tr.peak-off td.peak-cell {
-  color: var(--accent-secondary);
-}
-
-.dart-positive {
-  color: var(--accent-secondary);
-}
-
-.dart-negative {
-  color: var(--accent-tertiary);
-}
-
-.null-value {
-  color: var(--text-secondary);
-}
-
-.report-date {
-  color: var(--text-secondary);
   font-size: 0.85rem;
 }
+
+/* ── Tables: tightened for scanning, not just data dumps ── */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+}
+
+th, td {
+  border-bottom: 1px solid var(--surface-border);
+  padding: 0.3rem 0.5rem;
+  text-align: right;
+}
+
+th {
+  color: var(--text-secondary);
+  font-weight: 500;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+th:first-child, td:first-child {
+  text-align: left;
+}
+
+tbody tr:nth-child(even) {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.table-scroll {
+  max-height: 420px;
+  overflow-y: auto;
+  border: 1px solid var(--surface-border);
+  border-radius: 4px;
+  margin-bottom: 1.5rem;
+}
+
+.table-scroll table { margin-bottom: 0; }
+
+.table-scroll thead th {
+  position: sticky;
+  top: 0;
+  background: var(--surface);
+  z-index: 1;
+}
+
+.peak-on { color: var(--accent-tertiary); }
+.peak-off { color: var(--accent-secondary); }
+
+.dart-positive { color: var(--accent-secondary); }
+.dart-negative { color: var(--accent-tertiary); }
+.null-value { color: var(--text-secondary); }
+
+.basis-panel {
+  display: none;
+  background: var(--surface);
+  border: 1px solid var(--surface-border);
+  border-radius: 6px;
+  padding: 0.9rem 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.basis-panel.visible { display: block; }
+
+.basis-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.25rem 0;
+  font-size: 0.85rem;
+  border-bottom: 1px solid var(--surface-border);
+}
+
+.basis-row:last-child { border-bottom: none; }

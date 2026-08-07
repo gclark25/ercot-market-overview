@@ -23,6 +23,11 @@ data_scope:
     - HB_SOUTH
     - HB_WEST
     - HB_BUSAVG
+  load_zones:
+    - LZ_HOUSTON
+    - LZ_NORTH
+    - LZ_SOUTH
+    - LZ_WEST
   featured_nodes: []   # internal view stays market-wide; HEN's asset-level detail lives in hen-morning-report
 
 features:

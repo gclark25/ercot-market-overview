@@ -235,6 +235,11 @@ def extract_da_price_with_hour(row) -> tuple[int | None, float | None]:
 
 def get_hub_energy_prices(creds: ErcotCredentials, token: str, hubs: list[str], start: str, end: str) -> dict:
     """
+    Works for load zones too, not just hubs — "hubs" and "load zones" are both
+    just settlement points as far as np6-905-cd/np4-190-cd are concerned, so
+    this same function pulls either; build_report.py calls it twice with two
+    different lists rather than needing a separate load-zone-specific pull.
+
     Returns: { hub: { "YYYY-MM-DD": { "HH": {"da": p, "rt": p, "dart": p, "peak": "on"|"off"} } } }
 
     dart = da - rt (matches hen-morning-report's sign convention: positive

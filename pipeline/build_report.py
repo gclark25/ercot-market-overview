@@ -68,6 +68,11 @@ def build(config: dict) -> dict:
         if features.get("hub_dart_table"):
             output["hub_windows"] = {hub: rollup_all_windows(series, today) for hub, series in hub_prices.items()}
 
+        load_zones = config["data_scope"].get("load_zones") or []
+        if load_zones and features.get("hourly_price_table"):
+            print(f"Pulling load zone DA/RT prices, {ytd_start} -> {yesterday} ({len(load_zones)} zones)...")
+            output["load_zone_prices"] = get_hub_energy_prices(creds, token, load_zones, ytd_start, yesterday)
+
     if features.get("ancillary_services_table"):
         print(f"Pulling AS DA/RT clearing prices, {ytd_start} -> {yesterday}...")
         as_prices = get_as_prices(creds, token, ytd_start, yesterday)

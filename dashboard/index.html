@@ -1,9 +1,4 @@
 <!DOCTYPE html>
-<!--
-  Structural scaffold only — tab wiring and data-loading plumbing, no real
-  visual design yet. That's a separate pass (see README "Build order").
-  Kept deliberately plain so it's obvious this isn't the final look.
--->
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
@@ -27,34 +22,25 @@
   <main>
     <section id="tab-overview" class="tab-panel active">
       <h2>Net Load — 3-Day History / 5-Day Forecast</h2>
-      <canvas id="netLoadChart"></canvas>
+      <div class="chart-container">
+        <canvas id="netLoadChart"></canvas>
+      </div>
+      <p class="chart-legend-note">Solid = actual · Dashed = forecast</p>
 
       <h2>Hub DA/RT Performance</h2>
-      <p class="report-date">On-peak = Mon-Fri HE 7-22. Off-peak = all other hours, including all of Sat/Sun.</p>
-      <label class="peak-toggle">
-        <input type="checkbox" id="peakBreakdownToggle" />
-        Show on-peak / off-peak breakdown
-      </label>
-      <table id="hubWindowsTable">
-        <thead>
-          <tr>
-            <th>Hub</th>
-            <th>Window</th>
-            <th>Peak</th>
-            <th>Avg DA</th>
-            <th>Avg RT</th>
-            <th>DART Spread</th>
-            <th>RT Volatility</th>
-          </tr>
-        </thead>
-        <!-- one row per hub x window x {overall, on_peak, off_peak} — see WindowStats in aggregations.py -->
-        <tbody><!-- populated by app.js from data/latest.json --></tbody>
-      </table>
+      <p class="report-date">On-peak = Mon-Fri HE 7-22. Off-peak = all other hours, including all of Sat/Sun. Each card's two bars show the on-peak vs off-peak DART spread for the selected window.</p>
+      <div class="segmented-control" id="windowSelector">
+        <button data-window="yesterday" class="active">Yesterday</button>
+        <button data-window="3day">Last 3 Days</button>
+        <button data-window="mtd">Month to Date</button>
+        <button data-window="ytd">Year to Date</button>
+      </div>
+      <div class="hub-card-grid" id="hubCardGrid"><!-- populated by app.js --></div>
     </section>
 
     <section id="tab-prices" class="tab-panel">
       <div class="node-search">
-        <label for="hubSelect">Hub:</label>
+        <label for="hubSelect">Reference point:</label>
         <select id="hubSelect"></select>
         <input type="text" id="nodeSearchInput" placeholder="...or search any ERCOT node" />
         <button id="nodeSearchBtn">Search</button>
@@ -62,22 +48,36 @@
       </div>
       <p class="report-date" id="hourlyPriceDate"></p>
 
-      <h2>Energy DA / RT / DART — HE 1-24</h2>
-      <table id="hourlyPriceTable">
-        <thead>
-          <tr><th>HE</th><th>Peak</th><th>DA</th><th>RT</th><th>DART</th></tr>
-        </thead>
-        <tbody><!-- each hour already carries a "peak": "on"|"off" tag from market_data.py --></tbody>
-      </table>
+      <div class="basis-panel" id="basisPanel">
+        <strong>Basis vs Hubs</strong> <span class="null-value" id="basisPanelDate"></span>
+        <div id="basisPanelRows"></div>
+      </div>
 
-      <h2>Ancillary Services DA / RT / DART — HE 1-24</h2>
+      <h2>Energy DART — HE 1-24</h2>
+      <div class="heatmap-strip-wrap">
+        <div class="heatmap-strip-label"><span>HE1</span><span>HE24</span></div>
+        <div class="heatmap-strip" id="hourlyDartHeatmap"></div>
+      </div>
+      <div class="table-scroll">
+        <table id="hourlyPriceTable">
+          <thead>
+            <tr><th>HE</th><th>Peak</th><th>DA</th><th>RT</th><th>DART</th></tr>
+          </thead>
+          <tbody><!-- each hour already carries a "peak": "on"|"off" tag from market_data.py --></tbody>
+        </table>
+      </div>
+
+      <h2>Ancillary Services DART — HE 1-24</h2>
       <p class="report-date" id="asPriceDate"></p>
-      <table id="asPriceTable">
-        <thead>
-          <tr><th>HE</th><th>Service</th><th>DA</th><th>RT</th><th>DART</th></tr>
-        </thead>
-        <tbody></tbody>
-      </table>
+      <div id="asHeatmapStrips"><!-- one strip per service, populated by app.js --></div>
+      <div class="table-scroll">
+        <table id="asPriceTable">
+          <thead>
+            <tr><th>HE</th><th>Service</th><th>DA</th><th>RT</th><th>DART</th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
     </section>
 
     <section id="tab-intelligence" class="tab-panel">

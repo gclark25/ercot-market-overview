@@ -40,6 +40,7 @@ data_scope:
     - HB_SOUTH
     - HB_WEST
     - HB_BUSAVG
+  load_zones: []                             # e.g. ["LZ_HOUSTON", "LZ_NORTH", "LZ_SOUTH", "LZ_WEST"] — pulled the same way as hubs, shown as additional reference points on Tab 2. Leave empty to skip.
   featured_nodes: []                         # e.g. ["ACME_BESS1_UNIT1"] — optional, leave empty if not applicable
 
 # --- Peak convention ---------------------------------------------------------

@@ -3,11 +3,14 @@
 
 let REPORT_DATA = null;
 let netLoadChart = null;
+let currentWindow = "yesterday";
+let currentAsType = null;
 
-const WINDOW_ORDER = ["yesterday", "3day", "mtd", "ytd"];
 const WINDOW_LABELS = { yesterday: "Yesterday", "3day": "Last 3 Days", mtd: "Month to Date", ytd: "Year to Date" };
 const AS_TYPE_ORDER = ["REGUP", "REGDN", "RRS", "NSPIN", "ECRS"];
 const AS_TYPE_LABELS = { REGUP: "Reg-Up", REGDN: "Reg-Down", RRS: "RRS", NSPIN: "Non-Spin", ECRS: "ECRS" };
+const SAGE_RGB = "124,152,133";
+const CLAY_RGB = "181,101,74";
 
 // ── Tab switching ────────────────────────────────────────────────────────────
 
@@ -26,8 +29,10 @@ function fmtMoney(v) {
   return v === null || v === undefined ? "—" : `$${v.toFixed(2)}`;
 }
 
-function fmtPct(v) {
-  return v === null || v === undefined ? "—" : `${(v * 100).toFixed(1)}%`;
+function fmtSignedMoney(v) {
+  if (v === null || v === undefined) return "—";
+  const sign = v >= 0 ? "+" : "";
+  return `${sign}$${v.toFixed(2)}`;
 }
 
 function fmtNum(v, decimals = 2) {
@@ -43,9 +48,16 @@ function peakLabel(p) {
   return p === "on" ? "On" : p === "off" ? "Off" : "—";
 }
 
-function prettifyHub(hub) {
-  if (hub === "HB_BUSAVG") return "Bus Average";
-  return hub.replace(/^HB_/, "").replace(/_/g, " ").toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
+function prettifyPoint(key) {
+  if (!key) return "";
+  if (key === "HB_BUSAVG") return "Bus Average";
+  if (key.startsWith("HB_")) return `${titleCase(key.slice(3))} Hub`;
+  if (key.startsWith("LZ_")) return `${titleCase(key.slice(3))} Zone`;
+  return key;
+}
+
+function titleCase(s) {
+  return s.replace(/_/g, " ").toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 function formatTimestamp(iso) {
@@ -92,11 +104,7 @@ function renderNetLoadChart(netLoad) {
 
   const { points, boundaryIndex } = buildNetLoadSeries(netLoad);
   if (points.length === 0) {
-    canvas.replaceWith(Object.assign(document.createElement("p"), {
-      className: "report-date",
-      textContent: "No net load data available for this report.",
-      id: "netLoadChart",
-    }));
+    canvas.parentElement.innerHTML = '<p class="report-date">No net load data available for this report.</p>';
     return;
   }
 
@@ -118,6 +126,10 @@ function renderNetLoadChart(netLoad) {
     },
     options: {
       responsive: true,
+      maintainAspectRatio: false, // critical: without this, Chart.js needs the canvas's own
+                                  // intrinsic size, which is 0 unless the parent has a fixed
+                                  // height (see .chart-container in styles.css) — this was the
+                                  // blank-chart bug.
       interaction: { mode: "index", intersect: false },
       scales: {
         x: { ticks: { autoSkip: true, maxTicksLimit: 12, color: "#9a958a" }, grid: { color: "#2a2a2a" } },
@@ -131,168 +143,333 @@ function renderNetLoadChart(netLoad) {
   });
 }
 
-// ── Tab 1: Hub DA/RT performance table ──────────────────────────────────────
+// ── Tab 1: Hub summary cards ─────────────────────────────────────────────────
 
-function renderHubWindowsTable(hubWindows) {
-  const tbody = document.querySelector("#hubWindowsTable tbody");
-  if (!tbody) return;
-  tbody.innerHTML = "";
+document.querySelectorAll("#windowSelector button").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll("#windowSelector button").forEach((b) => b.classList.remove("active"));
+    btn.classList.add("active");
+    currentWindow = btn.dataset.window;
+    renderHubCards(REPORT_DATA?.hub_windows);
+  });
+});
+
+function renderHubCards(hubWindows) {
+  const grid = document.getElementById("hubCardGrid");
+  if (!grid) return;
+  grid.innerHTML = "";
 
   const hubs = Object.keys(hubWindows || {});
   if (hubs.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;color:var(--text-secondary);padding:16px">No hub price data available.</td></tr>`;
+    grid.innerHTML = '<p class="report-date">No hub price data available.</p>';
     return;
   }
 
+  // Scale for the peak bars: use the largest |dart_spread| seen across every
+  // hub for the currently selected window, so bars are comparable to each
+  // other and not dominated by a single outlier from a different window.
+  let maxAbsSpread = 1;
   for (const hub of hubs) {
-    for (const window of WINDOW_ORDER) {
-      const stats = hubWindows[hub]?.[window];
-      if (!stats) continue;
-      tbody.appendChild(buildHubRow(hub, window, "Overall", stats.overall, ""));
-      tbody.appendChild(buildHubRow(hub, window, "On-Peak", stats.on_peak, "peak-detail-row peak-on"));
-      tbody.appendChild(buildHubRow(hub, window, "Off-Peak", stats.off_peak, "peak-detail-row peak-off"));
+    const s = hubWindows[hub]?.[currentWindow];
+    for (const scope of [s?.on_peak, s?.off_peak]) {
+      if (scope?.dart_spread !== null && scope?.dart_spread !== undefined) {
+        maxAbsSpread = Math.max(maxAbsSpread, Math.abs(scope.dart_spread));
+      }
     }
+  }
+
+  for (const hub of hubs) {
+    const stats = hubWindows[hub]?.[currentWindow];
+    if (!stats) continue;
+    grid.appendChild(buildHubCard(hub, stats, maxAbsSpread));
   }
 }
 
-function buildHubRow(hub, window, peakLabelText, stats, extraClass) {
-  const tr = document.createElement("tr");
-  if (extraClass) tr.className = extraClass;
-  const s = stats || {};
-  tr.innerHTML = `
-    <td>${prettifyHub(hub)}</td>
-    <td>${WINDOW_LABELS[window]}</td>
-    <td class="peak-cell">${peakLabelText}${s.hour_count ? ` <span class="null-value">(${s.hour_count}h)</span>` : ""}</td>
-    <td>${fmtMoney(s.avg_da)}</td>
-    <td>${fmtMoney(s.avg_rt)}</td>
-    <td class="${dartClass(s.dart_spread)}">${fmtMoney(s.dart_spread)} <span class="null-value">${fmtPct(s.dart_spread_pct)}</span></td>
-    <td>${fmtNum(s.rt_volatility)}</td>
+function buildHubCard(hub, stats, maxAbsSpread) {
+  const card = document.createElement("div");
+  card.className = "hub-card";
+  const o = stats.overall || {};
+
+  card.innerHTML = `
+    <div class="hub-card-name">${prettifyPoint(hub)}</div>
+    <div class="hub-card-metrics">
+      <div>Avg DA<strong>${fmtMoney(o.avg_da)}</strong></div>
+      <div>Avg RT<strong>${fmtMoney(o.avg_rt)}</strong></div>
+      <div>RT Vol.<strong>${fmtNum(o.rt_volatility)}</strong></div>
+    </div>
+    <div class="hub-card-spread ${dartClass(o.dart_spread)}">${fmtSignedMoney(o.dart_spread)} DART</div>
+    <div class="peak-bars">
+      ${buildPeakBarRow("On-Peak", stats.on_peak, maxAbsSpread)}
+      ${buildPeakBarRow("Off-Peak", stats.off_peak, maxAbsSpread)}
+    </div>
   `;
-  return tr;
+  return card;
 }
 
-document.getElementById("peakBreakdownToggle")?.addEventListener("change", (e) => {
-  document.getElementById("hubWindowsTable")?.classList.toggle("show-peak-detail", e.target.checked);
-});
+function buildPeakBarRow(label, scope, maxAbsSpread) {
+  const v = scope?.dart_spread;
+  const pct = v === null || v === undefined ? 0 : Math.min(100, (Math.abs(v) / maxAbsSpread) * 100);
+  const color = v >= 0 ? SAGE_RGB : CLAY_RGB;
+  // Bar grows from the center: positive to the right half, negative to the left half.
+  const fillStyle = v >= 0
+    ? `left:50%; width:${pct / 2}%; background:rgb(${color});`
+    : `right:50%; width:${pct / 2}%; background:rgb(${color});`;
+  return `
+    <div class="peak-bar-row">
+      <span class="peak-bar-label">${label}</span>
+      <div class="peak-bar-track"><div class="peak-bar-fill" style="${fillStyle}"></div></div>
+      <span class="peak-bar-value ${dartClass(v)}">${fmtSignedMoney(v)}</span>
+    </div>
+  `;
+}
 
-// ── Tab 2: Hub selector + hourly energy price table ─────────────────────────
+// ── Tab 2: Reference point selector ─────────────────────────────────────────
 
-function populateHubSelect(hubPrices) {
+function populateHubSelect() {
   const select = document.getElementById("hubSelect");
   if (!select) return;
   select.innerHTML = "";
-  for (const hub of Object.keys(hubPrices || {})) {
-    const opt = document.createElement("option");
-    opt.value = hub;
-    opt.textContent = prettifyHub(hub);
-    select.appendChild(opt);
+
+  const hubs = Object.keys(REPORT_DATA?.hub_prices || {});
+  const zones = Object.keys(REPORT_DATA?.load_zone_prices || {});
+
+  if (hubs.length) {
+    const grp = document.createElement("optgroup");
+    grp.label = "Hubs";
+    for (const h of hubs) grp.appendChild(new Option(prettifyPoint(h), h));
+    select.appendChild(grp);
   }
-  if (hubPrices?.HB_BUSAVG) select.value = "HB_BUSAVG";
+  if (zones.length) {
+    const grp = document.createElement("optgroup");
+    grp.label = "Load Zones";
+    for (const z of zones) grp.appendChild(new Option(prettifyPoint(z), z));
+    select.appendChild(grp);
+  }
+  if (hubs.includes("HB_BUSAVG")) select.value = "HB_BUSAVG";
 }
 
-function renderHourlyPriceTable(hubKey) {
+function getPointSeries(key) {
+  return REPORT_DATA?.hub_prices?.[key] || REPORT_DATA?.load_zone_prices?.[key] || null;
+}
+
+function renderReferencePoint(key) {
+  renderHourlyPriceTable(key);
+  renderBasisPanel(key);
+}
+
+document.getElementById("hubSelect")?.addEventListener("change", (e) => renderReferencePoint(e.target.value));
+
+// ── Tab 2: Hourly energy price table + heatmap ──────────────────────────────
+
+function renderHourlyPriceTable(key) {
   const tbody = document.querySelector("#hourlyPriceTable tbody");
   const dateLabel = document.getElementById("hourlyPriceDate");
+  const heatmap = document.getElementById("hourlyDartHeatmap");
   if (!tbody) return;
   tbody.innerHTML = "";
+  if (heatmap) heatmap.innerHTML = "";
 
-  const hubDays = REPORT_DATA?.hub_prices?.[hubKey];
-  const day = latestDateKey(hubDays);
+  const days = getPointSeries(key);
+  const day = latestDateKey(days);
   if (!day) {
     tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--text-secondary);padding:16px">No price data for this node.</td></tr>`;
     if (dateLabel) dateLabel.textContent = "";
     return;
   }
-  if (dateLabel) dateLabel.textContent = `${prettifyHub(hubKey)} — most recent available day: ${day}`;
+  if (dateLabel) dateLabel.textContent = `${prettifyPoint(key)} — most recent available day: ${day}`;
 
-  const hours = hubDays[day];
+  const hours = days[day];
+  const cells = [];
   for (const he of Object.keys(hours).sort((a, b) => Number(a) - Number(b))) {
     const h = hours[he];
+    cells.push({ value: h.dart, title: `HE${he}: ${fmtSignedMoney(h.dart)}` });
+
     const tr = document.createElement("tr");
     tr.className = h.peak === "on" ? "peak-on" : "peak-off";
     tr.innerHTML = `
       <td>HE${he}</td>
-      <td class="peak-cell">${peakLabel(h.peak)}</td>
+      <td>${peakLabel(h.peak)}</td>
       <td>${fmtMoney(h.da)}</td>
       <td>${fmtMoney(h.rt)}</td>
       <td class="${dartClass(h.dart)}">${fmtMoney(h.dart)}</td>
     `;
     tbody.appendChild(tr);
   }
+  if (heatmap) renderHeatmapCells(heatmap, cells);
 }
 
-document.getElementById("hubSelect")?.addEventListener("change", (e) => renderHourlyPriceTable(e.target.value));
+function renderHeatmapCells(container, cells) {
+  container.innerHTML = "";
+  const maxAbs = Math.max(1, ...cells.map((c) => Math.abs(c.value ?? 0)));
+  for (const c of cells) {
+    const div = document.createElement("div");
+    div.className = "heatmap-cell";
+    if (c.value === null || c.value === undefined) {
+      div.style.background = "#232323";
+    } else {
+      const intensity = Math.min(1, Math.abs(c.value) / maxAbs);
+      const alpha = 0.15 + intensity * 0.75;
+      const color = c.value >= 0 ? SAGE_RGB : CLAY_RGB;
+      div.style.background = `rgba(${color},${alpha.toFixed(2)})`;
+    }
+    div.title = c.title;
+    container.appendChild(div);
+  }
+}
+
+// ── Tab 2: Basis panel (node price - hub price, per hub) ────────────────────
+
+function renderBasisPanel(key) {
+  const panel = document.getElementById("basisPanel");
+  const dateEl = document.getElementById("basisPanelDate");
+  const rowsEl = document.getElementById("basisPanelRows");
+  if (!panel || !rowsEl) return;
+
+  const ownDays = getPointSeries(key);
+  const day = latestDateKey(ownDays);
+  const hubPrices = REPORT_DATA?.hub_prices || {};
+  const otherHubs = Object.keys(hubPrices).filter((h) => h !== key);
+
+  if (!day || otherHubs.length === 0) {
+    panel.classList.remove("visible");
+    return;
+  }
+
+  const ownHours = ownDays[day];
+  const ownAvgRt = avgField(ownHours, "rt");
+  if (ownAvgRt === null) {
+    panel.classList.remove("visible");
+    return;
+  }
+
+  rowsEl.innerHTML = "";
+  for (const hub of otherHubs) {
+    const hubHours = hubPrices[hub]?.[day];
+    const hubAvgRt = avgField(hubHours, "rt");
+    const basis = hubAvgRt === null ? null : ownAvgRt - hubAvgRt;
+    const row = document.createElement("div");
+    row.className = "basis-row";
+    row.innerHTML = `<span>vs ${prettifyPoint(hub)}</span><span class="${dartClass(basis)}">${fmtSignedMoney(basis)}</span>`;
+    rowsEl.appendChild(row);
+  }
+  if (dateEl) dateEl.textContent = `(RT, avg for ${day})`;
+  panel.classList.add("visible");
+}
+
+function avgField(hoursObj, field) {
+  if (!hoursObj) return null;
+  const vals = Object.values(hoursObj).map((h) => h[field]).filter((v) => v !== null && v !== undefined);
+  if (vals.length === 0) return null;
+  return vals.reduce((a, b) => a + b, 0) / vals.length;
+}
+
+// ── Tab 2: Node search ───────────────────────────────────────────────────────
 
 document.getElementById("nodeSearchBtn")?.addEventListener("click", async () => {
   const raw = document.getElementById("nodeSearchInput").value.trim();
   const status = document.getElementById("nodeSearchStatus");
   if (!raw) return;
 
-  const knownHubs = Object.keys(REPORT_DATA?.hub_prices || {});
-  const match = knownHubs.find((h) => h.toLowerCase() === raw.toLowerCase() || h.toLowerCase() === `hb_${raw.toLowerCase()}`);
+  const knownPoints = [...Object.keys(REPORT_DATA?.hub_prices || {}), ...Object.keys(REPORT_DATA?.load_zone_prices || {})];
+  const match = knownPoints.find((h) => {
+    const bare = h.replace(/^(HB_|LZ_)/, "").toLowerCase();
+    return h.toLowerCase() === raw.toLowerCase() || bare === raw.toLowerCase();
+  });
   if (match) {
     document.getElementById("hubSelect").value = match;
-    renderHourlyPriceTable(match);
+    renderReferencePoint(match);
     status.textContent = "";
     return;
   }
 
-  // Not one of the hubs already in the daily pull — fall back to the live
-  // per-node lookup Function (still a stub as of this build; expect this
-  // branch to fail until functions/node-lookup.js is implemented).
+  // Not a hub or load zone already in the daily pull — falls back to the
+  // live per-node lookup Function, which is still a stub as of this build.
+  // Basis-vs-hub for arbitrary searched nodes depends on that Function being
+  // real; expect this branch to fail until functions/node-lookup.js is implemented.
   status.textContent = "Looking up…";
   try {
     const res = await fetch(`/node-lookup?node=${encodeURIComponent(raw)}&window=yesterday`);
     if (!res.ok) throw new Error(`Lookup failed (${res.status})`);
     const result = await res.json();
     status.textContent = "";
-    console.log("Node lookup result:", result); // TODO: render into hourlyPriceTable once node-lookup.js is real
+    console.log("Node lookup result:", result); // TODO: render into hourlyPriceTable + basisPanel once node-lookup.js is real
   } catch (err) {
-    status.textContent = "Lookup failed — check the node name, or pick a hub from the dropdown.";
+    status.textContent = "Lookup failed — that node isn't in the daily pull yet. Try a hub or load zone from the dropdown.";
     console.error(err);
   }
 });
 
-// ── Tab 2: Ancillary services table ─────────────────────────────────────────
+// ── Tab 2: Ancillary services heatmap strips + table ────────────────────────
 
-function renderAsPriceTable(asPrices) {
-  const tbody = document.querySelector("#asPriceTable tbody");
+function renderAsSection(asPrices) {
+  const stripsContainer = document.getElementById("asHeatmapStrips");
   const dateLabel = document.getElementById("asPriceDate");
+  if (!stripsContainer) return;
+  stripsContainer.innerHTML = "";
+
+  const types = AS_TYPE_ORDER.filter((t) => asPrices?.[t]);
+  if (types.length === 0) {
+    if (dateLabel) dateLabel.textContent = "";
+    document.querySelector("#asPriceTable tbody").innerHTML =
+      `<tr><td colspan="5" style="text-align:center;color:var(--text-secondary);padding:16px">No ancillary services data available.</td></tr>`;
+    return;
+  }
+
+  const day = types.map((t) => latestDateKey(asPrices[t])).filter(Boolean).sort().slice(-1)[0];
+  if (dateLabel) dateLabel.textContent = day ? `Most recent available day: ${day} — click a strip to see exact hourly values` : "";
+
+  for (const type of types) {
+    const hours = asPrices[type]?.[day] || {};
+    const wrap = document.createElement("div");
+    wrap.className = "heatmap-strip-wrap";
+    wrap.innerHTML = `<div class="heatmap-strip-label"><span>${AS_TYPE_LABELS[type]}</span></div>`;
+    const strip = document.createElement("div");
+    strip.className = "heatmap-strip";
+    strip.dataset.asType = type;
+    if (type === currentAsType) strip.classList.add("selected");
+
+    const cells = [];
+    for (let he = 1; he <= 24; he++) {
+      const h = hours[String(he)];
+      cells.push({ value: h?.dart ?? null, title: `HE${he}: ${h ? fmtSignedMoney(h.dart) : "no data"}` });
+    }
+    renderHeatmapCells(strip, cells);
+    strip.addEventListener("click", () => {
+      currentAsType = type;
+      document.querySelectorAll("#asHeatmapStrips .heatmap-strip").forEach((s) => s.classList.remove("selected"));
+      strip.classList.add("selected");
+      renderAsPriceTableForType(asPrices, type, day);
+    });
+
+    wrap.appendChild(strip);
+    stripsContainer.appendChild(wrap);
+  }
+
+  currentAsType = currentAsType && types.includes(currentAsType) ? currentAsType : types[0];
+  document.querySelector(`#asHeatmapStrips .heatmap-strip[data-as-type="${currentAsType}"]`)?.classList.add("selected");
+  renderAsPriceTableForType(asPrices, currentAsType, day);
+}
+
+function renderAsPriceTableForType(asPrices, type, day) {
+  const tbody = document.querySelector("#asPriceTable tbody");
   if (!tbody) return;
   tbody.innerHTML = "";
-
-  const types = Object.keys(asPrices || {});
-  if (types.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--text-secondary);padding:16px">No ancillary services data available.</td></tr>`;
-    if (dateLabel) dateLabel.textContent = "";
+  const hours = asPrices?.[type]?.[day];
+  if (!hours) {
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--text-secondary);padding:16px">No data for ${AS_TYPE_LABELS[type] || type} on ${day}.</td></tr>`;
     return;
   }
-
-  // All AS types are pulled over the same date range, but find the latest
-  // day per type defensively rather than assuming they're all identical.
-  const latestPerType = {};
-  for (const t of types) latestPerType[t] = latestDateKey(asPrices[t]);
-  const day = Object.values(latestPerType).filter(Boolean).sort().slice(-1)[0];
-  if (!day) {
-    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--text-secondary);padding:16px">No ancillary services data available.</td></tr>`;
-    return;
-  }
-  if (dateLabel) dateLabel.textContent = `Most recent available day: ${day}`;
-
-  for (let he = 1; he <= 24; he++) {
-    for (const type of AS_TYPE_ORDER) {
-      const h = asPrices[type]?.[day]?.[String(he)];
-      if (!h) continue;
-      const tr = document.createElement("tr");
-      tr.innerHTML = `
-        <td>HE${he}</td>
-        <td>${AS_TYPE_LABELS[type] || type}</td>
-        <td>${fmtMoney(h.da)}</td>
-        <td>${fmtMoney(h.rt)}</td>
-        <td class="${dartClass(h.dart)}">${fmtMoney(h.dart)}</td>
-      `;
-      tbody.appendChild(tr);
-    }
+  for (const he of Object.keys(hours).sort((a, b) => Number(a) - Number(b))) {
+    const h = hours[he];
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>HE${he}</td>
+      <td>${AS_TYPE_LABELS[type] || type}</td>
+      <td>${fmtMoney(h.da)}</td>
+      <td>${fmtMoney(h.rt)}</td>
+      <td class="${dartClass(h.dart)}">${fmtMoney(h.dart)}</td>
+    `;
+    tbody.appendChild(tr);
   }
 }
 
@@ -324,10 +501,10 @@ async function loadReport() {
     if (reportDateEl) reportDateEl.textContent = REPORT_DATA.generated_at ? `Generated ${formatTimestamp(REPORT_DATA.generated_at)}` : "";
 
     renderNetLoadChart(REPORT_DATA.net_load);
-    renderHubWindowsTable(REPORT_DATA.hub_windows);
-    populateHubSelect(REPORT_DATA.hub_prices);
-    renderHourlyPriceTable(document.getElementById("hubSelect")?.value);
-    renderAsPriceTable(REPORT_DATA.as_prices);
+    renderHubCards(REPORT_DATA.hub_windows);
+    populateHubSelect();
+    renderReferencePoint(document.getElementById("hubSelect")?.value);
+    renderAsSection(REPORT_DATA.as_prices);
     renderAiRecap(REPORT_DATA.ai_recap, REPORT_DATA.generated_at);
   } catch (err) {
     console.error("Failed to load report data:", err);
