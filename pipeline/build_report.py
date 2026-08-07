@@ -23,6 +23,7 @@ from ercot_client import ErcotCredentials, get_ercot_token
 from market_data import get_net_load_series, get_hub_energy_prices, get_as_prices
 from aggregations import rollup_all_windows
 from ai_narrative import build_recap_prompt, generate_recap
+from bid_close_forecast import get_bid_close_forecast
 
 
 def load_config(path: str) -> dict:
@@ -60,6 +61,15 @@ def build(config: dict) -> dict:
     if features.get("net_load_overview"):
         print("Pulling net load (history + forecast)...")
         output["net_load"] = get_net_load_series(creds, token)
+
+        try:
+            print("Pulling bid-close forecast snapshots (experimental)...")
+            output["net_load"]["bid_close"] = get_bid_close_forecast(creds, token)
+        except Exception as e:
+            # Genuinely experimental (see bid_close_forecast.py docstring) —
+            # never let this block the rest of the report.
+            print(f"  WARN: bid-close forecast failed entirely — {e}")
+            output["net_load"]["bid_close"] = {}
 
     if features.get("hub_dart_table") or features.get("hourly_price_table"):
         print(f"Pulling hub energy DA/RT prices, {ytd_start} -> {yesterday} ({len(hubs)} hubs)...")

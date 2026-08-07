@@ -79,6 +79,7 @@ function latestDateKey(daysObj) {
 function buildNetLoadSeries(netLoad) {
   const history = netLoad?.history || {};
   const forecast = netLoad?.forecast || {};
+  const bidClose = netLoad?.bid_close || {};
   const points = [];
 
   for (const day of Object.keys(history).sort()) {
@@ -89,7 +90,10 @@ function buildNetLoadSeries(netLoad) {
   const boundaryIndex = points.length - 1;
   for (const day of Object.keys(forecast).sort()) {
     for (const he of Object.keys(forecast[day]).sort((a, b) => Number(a) - Number(b))) {
-      points.push({ day, he, kind: "forecast", ...forecast[day][he] });
+      const point = { day, he, kind: "forecast", ...forecast[day][he] };
+      const bc = bidClose[day]?.[he];
+      if (bc) point.bid_close_net_load = bc.net_load;
+      points.push(point);
     }
   }
 
@@ -142,6 +146,7 @@ function renderNetLoadChart(netLoad) {
         { label: "Gross Load", data: series("gross_load"), borderColor: "#9a958a", borderWidth: 1, pointRadius: 0, segment: dashedAfterBoundary },
         { label: "Wind", data: series("wind"), borderColor: "#7c9885", borderWidth: 1, pointRadius: 0, segment: dashedAfterBoundary },
         { label: "Solar", data: series("solar"), borderColor: "#b5654a", borderWidth: 1, pointRadius: 0, segment: dashedAfterBoundary },
+        { label: "Bid-Close Net Load", data: series("bid_close_net_load"), borderColor: "#f4f1ea", borderWidth: 1.5, borderDash: [2, 3], pointRadius: 0, spanGaps: false },
       ],
     },
     options: {

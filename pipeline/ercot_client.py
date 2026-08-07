@@ -226,3 +226,35 @@ def ercot_get_records(
         page += 1
 
     return all_rows
+
+
+# ── Archive access (for bid-close forecast snapshots) ───────────────────────
+#
+# Confirmed via ERCOT's own api-specs GitHub discussions (#39, #106) — a
+# genuinely different access pattern from everything above: instead of "give
+# me the current data," this lets you list and download specific historical
+# postings of a report by their post time, which is what "the forecast as of
+# 09:00 CT yesterday" requires. Same auth (Bearer token + subscription key)
+# as everywhere else in this file.
+#
+# UNVERIFIED: the archive returns actual CSV files inside a ZIP, not the nice
+# pre-parsed JSON the rest of this pipeline uses. The exact column headers
+# inside those CSVs haven't been confirmed against a real download — see
+# pipeline/bid_close_forecast.py for how this is handled defensively.
+
+def list_archive_documents(emil_id: str, token: str, creds: ErcotCredentials, post_datetime_from: str, post_datetime_to: str) -> list[dict]:
+    """GET /archive/{emil_id}?postDatetimeFrom=...&postDatetimeTo=...
+    Returns [{"docId": ..., "friendlyName": ..., "postDatetime": ...}, ...]."""
+    headers = {"Authorization": f"Bearer {token}", "Ocp-Apim-Subscription-Key": creds.subscription_key}
+    params = {"postDatetimeFrom": post_datetime_from, "postDatetimeTo": post_datetime_to, "size": 1000}
+    r = requests.get(f"{BASE_URL}/archive/{emil_id}", headers=headers, params=params, timeout=45)
+    r.raise_for_status()
+    return r.json().get("archives", [])
+
+
+def download_archive_documents(emil_id: str, doc_ids: list[int], token: str, creds: ErcotCredentials) -> bytes:
+    """POST /archive/{emil_id}/download {"docIds": [...]} -> raw ZIP bytes."""
+    headers = {"Authorization": f"Bearer {token}", "Ocp-Apim-Subscription-Key": creds.subscription_key}
+    r = requests.post(f"{BASE_URL}/archive/{emil_id}/download", headers=headers, json={"docIds": doc_ids}, timeout=60)
+    r.raise_for_status()
+    return r.content

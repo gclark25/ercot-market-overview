@@ -100,6 +100,26 @@ This is currently a shared, not per-tenant, resource — fine at today's
 single-config scale; worth revisiting before a second customer onboards
 (see the comment in `daily-report.yml`'s node-update step).
 
+## Bid-close forecast (experimental)
+
+For each forecast day, `pipeline/bid_close_forecast.py` finds the load/wind/
+solar forecast archive posting closest to (but not after) 09:00 CT the day
+before delivery — the last run before ERCOT's DA bidding window closes — and
+shows it as a dotted line on the net load chart alongside the actual/latest-
+forecast lines.
+
+The archive URL patterns (list postings by post time, download by docId) are
+confirmed directly from ERCOT's own api-specs GitHub discussions. What's
+**not** confirmed: the exact CSV column headers inside the downloaded
+archive files (the live JSON endpoints and the archived CSVs aren't
+guaranteed to share exact field names, even for the same report). Handled
+defensively — multiple plausible column names are tried per field, and the
+actual headers get printed to the build log on first use, so a wrong guess
+is visible and fixable from the very first real run rather than requiring
+more guessing. Every failure (missing posting, unparseable CSV, no matching
+day) is caught and skipped individually; it can never block the rest of the
+report from being written.
+
 ## Build order (suggested)
 
 1. ~~Repo scaffolding + config pattern~~ ← done
