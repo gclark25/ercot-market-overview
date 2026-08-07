@@ -27,10 +27,11 @@ ercot-market-overview/
 │   ├── aggregations.py        # yesterday / 3-day / MTD / YTD rollups + DART/volatility calcs
 │   ├── ai_narrative.py        # Claude API call for the Tab 3 recap
 │   └── build_report.py        # entrypoint — reads a config, runs the pipeline, writes output JSON
-├── functions/
-│   └── node-lookup.js         # Cloudflare Pages Function — live DA/RT/DART lookup for any node, called by the Tab 2 search box
+
 ├── dashboard/
 │   ├── index.html             # 3-tab shell (Overview / Prices & AS / Intelligence)
+    ├── functions/
+│       └── node-lookup.js         # Cloudflare Pages Function — live DA/RT/DART lookup for any node, called by the Tab 2 search box
 │   ├── assets/
 │   │   ├── styles.css
 │   │   └── app.js
