@@ -24,9 +24,9 @@ def safe_float(val: Any) -> float:
         return 0.0
 
 
-# ── Net load (Tab 1: 3-day history + 5-day forecast) ────────────────────────
+# ── Net load (Tab 1: 2-day history + 5-day forecast) ────────────────────────
 
-def get_net_load_series(creds: ErcotCredentials, token: str, days_history: int = 3, days_forecast: int = 5) -> dict:
+def get_net_load_series(creds: ErcotCredentials, token: str, days_history: int = 2, days_forecast: int = 5) -> dict:
     """
     Returns:
         {
@@ -41,6 +41,14 @@ def get_net_load_series(creds: ErcotCredentials, token: str, days_history: int =
     in hen_integrations.py) — these are deliberately different pulls because a
     forecast value for an already-elapsed hour is not the same as what actually
     happened.
+
+    days_history defaults to 2, not 3: np4-732-cd/np4-737-cd (wind/solar actuals)
+    only retain a rolling 48-hour historical window per ERCOT's own data product
+    docs — requesting further back than that returns real gross_load (a separate
+    report with its own retention) alongside zeroed-out wind/solar for the
+    portion of the oldest day outside that window, which reads as a data error
+    rather than the source limitation it actually is. Don't raise this above 2
+    without confirming ERCOT has changed that retention.
     """
     today = date.today()
     hist_start = (today - timedelta(days=days_history)).isoformat()
