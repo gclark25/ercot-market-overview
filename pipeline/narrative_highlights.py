@@ -67,6 +67,39 @@ def find_notable_hen_node(hen_node_windows: dict) -> dict | None:
     return best
 
 
+HOUR_BLOCKS = [
+    ("HE1-6", range(1, 7)),     # overnight
+    ("HE7-12", range(7, 13)),   # morning
+    ("HE13-18", range(13, 19)), # afternoon
+    ("HE19-24", range(19, 25)), # evening
+]
+
+
+def _compute_block_breakdown(actual_hours: dict, bidclose_hours: dict) -> list[dict]:
+    """Per-6-hour-block signed and absolute error, so a miss concentrated in
+    one part of the day (e.g. the evening peak) doesn't get diluted into an
+    unremarkable all-day average — confirmed elsewhere in this file that a
+    day-level average can hide exactly this kind of real, time-of-day-
+    specific movement."""
+    blocks = []
+    for label, hour_range in HOUR_BLOCKS:
+        diffs = []
+        for h in hour_range:
+            actual = actual_hours.get(str(h))
+            bc = bidclose_hours.get(str(h))
+            if not actual or not bc or actual.get("net_load") is None or bc.get("net_load") is None:
+                continue
+            diffs.append(actual["net_load"] - bc["net_load"])
+        if diffs:
+            blocks.append({
+                "block": label,
+                "mean_error_gw": round(sum(diffs) / len(diffs), 2),
+                "mean_abs_error_gw": round(sum(abs(d) for d in diffs) / len(diffs), 2),
+                "hours_compared": len(diffs),
+            })
+    return blocks
+
+
 def compute_bid_close_accuracy(net_load: dict, day: str) -> dict | None:
     """Actual (history) vs. bid-close forecast for one already-completed day
     — mean error (bias/direction) and mean absolute error (magnitude), net
@@ -110,6 +143,11 @@ def compute_bid_close_accuracy(net_load: dict, day: str) -> dict | None:
         # cosmetic issue.
         "mean_error_gw": round(sum(diffs) / len(diffs), 2),  # positive = actual came in ABOVE the bid-close forecast
         "mean_abs_error_gw": round(sum(abs(d) for d in diffs) / len(diffs), 2),
+        "by_block": _compute_block_breakdown(actual_hours, bidclose_hours),  # same signed/abs pair, per
+                                                                              # 6-hour block — this is what
+                                                                              # actually shows whether the miss
+                                                                              # was spread evenly across the day
+                                                                              # or concentrated in one part of it
         "dominant_component": dominant_component,
         "hours_compared": len(diffs),
     }
