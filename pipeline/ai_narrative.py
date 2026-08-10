@@ -18,8 +18,9 @@ import anthropic
 
 MODEL = "claude-sonnet-5"  # reasonable default for a short, tone-sensitive summarization
                            # task — swap this if hen-morning-report pins something specific
-MAX_TOKENS = 600  # 150-250 words of final output needs nowhere near this; the
-                  # headroom just covers the model's own formatting/reasoning
+MAX_TOKENS = 1024  # generous margin: Sonnet 5's tokenizer produces ~30% more tokens for the
+                   # same text than earlier models, and 150-250 words of final output still
+                   # needs real headroom now that thinking is explicitly disabled below
 
 
 def build_recap_prompt(hub_windows: dict, as_windows: dict, net_load: dict, highlights: dict, display_name: str, report_date: str) -> str:
@@ -79,6 +80,13 @@ def generate_recap(prompt: str) -> str:
         response = client.messages.create(
             model=MODEL,
             max_tokens=MAX_TOKENS,
+            # This is a simple narration task over facts narrative_highlights.py
+            # already computed — no multi-step reasoning needed. Confirmed in
+            # production that leaving Sonnet 5's default adaptive thinking on
+            # let the model spend its entire max_tokens budget "thinking"
+            # before ever emitting response text, since thinking tokens draw
+            # from the same budget by default on this model.
+            thinking={"type": "disabled"},
             messages=[{"role": "user", "content": prompt}],
         )
     except Exception as e:
@@ -86,5 +94,6 @@ def generate_recap(prompt: str) -> str:
 
     text = "".join(block.text for block in response.content if getattr(block, "type", None) == "text").strip()
     if not text:
-        raise RuntimeError("Anthropic API returned no text content")
+        block_types = [getattr(b, "type", "?") for b in response.content]
+        raise RuntimeError(f"Anthropic API returned no text content (stop_reason={getattr(response, 'stop_reason', '?')!r}, block_types={block_types})")
     return text
