@@ -154,6 +154,51 @@ def compute_today_forecast_drift(net_load: dict, today: str) -> dict | None:
     }
 
 
+def _find_tb_trend(windows_by_key: dict, baseline_window: str = "ytd") -> dict | None:
+    """Flags whichever (key, TB duration) combination has moved the most, in
+    percentage terms, from its own longer-run baseline — this is the signal
+    that actually matters for hedging/forward-curve decisions: is realized
+    battery arbitrage value (at whatever duration) currently running hot or
+    cold relative to normal, not just what yesterday's absolute value was.
+    Shared helper — used for both the market-wide hubs and HEN's own asset
+    portfolio, since both are worth checking but mean different things."""
+    best = None
+    for key, windows in windows_by_key.items():
+        for metric in ("tb1", "tb2", "tb4"):
+            yesterday_val = _safe_get(windows, "yesterday", metric)
+            baseline_val = _safe_get(windows, baseline_window, metric)
+            if yesterday_val is None or not baseline_val:
+                continue
+            pct_change = round((yesterday_val - baseline_val) / baseline_val * 100, 1)
+            if best is None or abs(pct_change) > abs(best["pct_change"]):
+                best = {
+                    "key": key, "metric": metric.upper(),
+                    "yesterday_value": yesterday_val,
+                    "baseline_window": baseline_window, "baseline_value": baseline_val,
+                    "pct_change": pct_change,
+                }
+    return best
+
+
+def find_tb_trend_hub(hub_windows: dict) -> dict | None:
+    """The hub + TB duration whose yesterday reading diverged most from its
+    own YTD baseline — market-wide arbitrage-value context."""
+    result = _find_tb_trend(hub_windows)
+    if result:
+        result["hub"] = result.pop("key")
+    return result
+
+
+def find_tb_trend_hen_node(hen_node_windows: dict) -> dict | None:
+    """Same check, but over HEN's own asset portfolio specifically — this is
+    the version that actually matters for HEN's own hedging decisions, since
+    it's HEN's own assets whose forward value is being reassessed."""
+    result = _find_tb_trend(hen_node_windows)
+    if result:
+        result["node"] = result.pop("key")
+    return result
+
+
 def find_as_highlight(as_windows: dict) -> dict | None:
     """Flags an AS service only if yesterday's DA average looks like a
     genuine outlier vs. its own YTD average (2x+) — deliberately conservative
@@ -174,6 +219,8 @@ def compute_highlights(hub_windows: dict, as_windows: dict, net_load: dict, hen_
     return {
         "top_mover_hub": find_top_mover_hub(hub_windows),
         "notable_hen_node": find_notable_hen_node(hen_node_windows),
+        "tb_trend_hub": find_tb_trend_hub(hub_windows),
+        "tb_trend_hen_node": find_tb_trend_hen_node(hen_node_windows),
         "bid_close_accuracy": compute_bid_close_accuracy(net_load, yesterday_str),
         "today_forecast_drift": compute_today_forecast_drift(net_load, today_str),
         "as_highlight": find_as_highlight(as_windows),

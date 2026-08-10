@@ -32,16 +32,17 @@ def build_recap_prompt(hub_windows: dict, as_windows: dict, net_load: dict, high
 
 AUDIENCE: people who do NOT look at ERCOT market data every day. They want the "so what," not a wall of numbers. If you use a term like "DART" or "on-peak," give a short plain-English gloss the first time you use it. Never give trading advice or tell anyone what to do — describe and explain what happened and what's expected, nothing more.
 
-LENGTH: 150-250 words total. Plain prose in short paragraphs, separated by a blank line between paragraphs — no bullet lists, no markdown headers, nothing a reader can't skim in under a minute.
+LENGTH: 200-300 words total. Plain prose in short paragraphs, separated by a blank line between paragraphs — no bullet lists, no markdown headers, nothing a reader can't skim in under a minute or two.
 
 Cover, in this order, skipping any part with nothing genuinely notable to say:
 1. One-sentence headline: the single most notable thing in today's data.
 2. Yesterday's hub recap — which hub(s) moved most, on-peak vs off-peak only if it's a real story. If there's a notable HEN asset below, name it as HEN's own standout for the day.
-3. How yesterday's forecast held up against what actually happened, using the bid-close accuracy figures below.
-4. Outlook for today and tomorrow — net load shape, and whether today's forecast has already shifted meaningfully from this morning's snapshot.
-5. Only if something below is a genuine outlier: one line flagging it. Omit this section entirely on an ordinary day — most days should NOT have this section."""]
+3. Battery arbitrage value — TB1/TB2/TB4 are the price spread a 1/2/4-hour battery could theoretically have captured that day. Say plainly whether it's currently running above or below its normal year-to-date level, both for the hubs broadly and — this is the important part — for HEN's own assets specifically, using the figures below. This is a genuine, recurring part of the recap, not an occasional aside: it's what actually feeds hedging decisions, so give it a real sentence or two even on an unremarkable day, not just a passing mention.
+4. How yesterday's forecast held up against what actually happened, using the bid-close accuracy figures below.
+5. Outlook for today and tomorrow — net load shape, and whether today's forecast has already shifted meaningfully from this morning's snapshot.
+6. Only if something below is a genuine outlier: one line flagging it. Omit this section entirely on an ordinary day — most days should NOT have this section."""]
 
-    sections.append("Hub performance — DA/RT/DART/volatility, on-peak vs off-peak, across Yesterday/3-Day/MTD/YTD:\n" + json.dumps(hub_windows, separators=(",", ":")))
+    sections.append("Hub performance — DA/RT/DART/volatility, on-peak vs off-peak, and TB1/TB2/TB4, across Yesterday/3-Day/MTD/YTD:\n" + json.dumps(hub_windows, separators=(",", ":")))
 
     if as_windows:
         sections.append("Ancillary services performance — same structure, per service:\n" + json.dumps(as_windows, separators=(",", ":")))
@@ -51,6 +52,12 @@ Cover, in this order, skipping any part with nothing genuinely notable to say:
 
     if highlights.get("notable_hen_node"):
         sections.append("Pre-computed: HEN's own standout asset yesterday, by realized 2-hour arbitrage spread (TB2):\n" + json.dumps(highlights["notable_hen_node"]))
+
+    if highlights.get("tb_trend_hub"):
+        sections.append("Pre-computed: the hub + battery duration (TB1/TB2/TB4) whose yesterday reading diverged most from its own YTD baseline — pct_change is signed, positive means yesterday ran above the normal YTD level for that duration:\n" + json.dumps(highlights["tb_trend_hub"]))
+
+    if highlights.get("tb_trend_hen_node"):
+        sections.append("Pre-computed: same check, but over HEN's own asset portfolio specifically — this is the one that actually matters for HEN's own hedging decisions, since it's HEN's own assets whose forward value is being reassessed:\n" + json.dumps(highlights["tb_trend_hen_node"]))
 
     if highlights.get("bid_close_accuracy"):
         sections.append("Pre-computed: yesterday's actual net load vs. the forecast as of bid-close (09:00 CT the day before) — all figures are in GW (matching the net load chart's own units). mean_error_gw is signed, positive means actual came in above the bid-close forecast:\n" + json.dumps(highlights["bid_close_accuracy"]))
