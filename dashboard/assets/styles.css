@@ -384,3 +384,19 @@ h2:first-child { margin-top: 0; }
 .tb-value {
   text-align: right;
 }
+
+/* ── Tab 3: AI market recap ── */
+#aiRecapText {
+  max-width: 640px;
+  font-size: 0.95rem;
+  line-height: 1.6;
+  color: var(--text-primary);
+}
+
+#aiRecapText p {
+  margin: 0 0 1rem;
+}
+
+#aiRecapText p:last-child {
+  margin-bottom: 0;
+}

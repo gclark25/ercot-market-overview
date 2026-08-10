@@ -76,17 +76,6 @@ function latestDateKey(daysObj) {
 
 // ── Tab 1: Net load chart ───────────────────────────────────────────────────
 
-function attachBidClose(point, bidClose, day, he) {
-  const bc = bidClose[day]?.[he];
-  if (bc) {
-    point.bid_close_net_load = bc.net_load;
-    point.bid_close_gross_load = bc.gross_load;
-    point.bid_close_wind = bc.wind;
-    point.bid_close_solar = bc.solar;
-  }
-  return point;
-}
-
 function buildNetLoadSeries(netLoad) {
   const history = netLoad?.history || {};
   const forecast = netLoad?.forecast || {};
@@ -95,13 +84,15 @@ function buildNetLoadSeries(netLoad) {
 
   for (const day of Object.keys(history).sort()) {
     for (const he of Object.keys(history[day]).sort((a, b) => Number(a) - Number(b))) {
-      points.push(attachBidClose({ day, he, kind: "history", ...history[day][he] }, bidClose, day, he));
+      points.push({ day, he, kind: "history", ...history[day][he] });
     }
   }
   const boundaryIndex = points.length - 1;
   for (const day of Object.keys(forecast).sort()) {
     for (const he of Object.keys(forecast[day]).sort((a, b) => Number(a) - Number(b))) {
-      const point = attachBidClose({ day, he, kind: "forecast", ...forecast[day][he] }, bidClose, day, he);
+      const point = { day, he, kind: "forecast", ...forecast[day][he] };
+      const bc = bidClose[day]?.[he];
+      if (bc) point.bid_close_net_load = bc.net_load;
       points.push(point);
     }
   }
@@ -155,16 +146,7 @@ function renderNetLoadChart(netLoad) {
         { label: "Gross Load", data: series("gross_load"), borderColor: "#9a958a", borderWidth: 1, pointRadius: 0, segment: dashedAfterBoundary },
         { label: "Wind", data: series("wind"), borderColor: "#7c9885", borderWidth: 1, pointRadius: 0, segment: dashedAfterBoundary },
         { label: "Solar", data: series("solar"), borderColor: "#b5654a", borderWidth: 1, pointRadius: 0, segment: dashedAfterBoundary },
-        // Bid-close lines deliberately reuse each quantity's own color rather
-        // than a separate palette — same color = same physical quantity,
-        // line style (dotted here vs. solid/dashed above) = which forecast
-        // vintage. Flat dotted throughout (no segment callback needed) since
-        // "bid-close" means the same thing whether it's sitting over a
-        // history day or a forecast day.
-        { label: "Bid-Close Net Load", data: series("bid_close_net_load"), borderColor: "#c9a24b", borderWidth: 1.5, borderDash: [2, 3], pointRadius: 0, spanGaps: false },
-        { label: "Bid-Close Gross Load", data: series("bid_close_gross_load"), borderColor: "#9a958a", borderWidth: 1, borderDash: [2, 3], pointRadius: 0, spanGaps: false },
-        { label: "Bid-Close Wind", data: series("bid_close_wind"), borderColor: "#7c9885", borderWidth: 1, borderDash: [2, 3], pointRadius: 0, spanGaps: false },
-        { label: "Bid-Close Solar", data: series("bid_close_solar"), borderColor: "#b5654a", borderWidth: 1, borderDash: [2, 3], pointRadius: 0, spanGaps: false },
+        { label: "Bid-Close Net Load", data: series("bid_close_net_load"), borderColor: "#f4f1ea", borderWidth: 1.5, borderDash: [2, 3], pointRadius: 0, spanGaps: false },
       ],
     },
     options: {
@@ -691,6 +673,12 @@ function renderAsSection(asPrices) {
 
 // ── Tab 3: AI recap ──────────────────────────────────────────────────────────
 
+function escapeHtml(str) {
+  const div = document.createElement("div");
+  div.textContent = str;
+  return div.innerHTML;
+}
+
 function renderAiRecap(aiRecap, generatedAt) {
   const dateEl = document.getElementById("aiRecapDate");
   const textEl = document.getElementById("aiRecapText");
@@ -698,11 +686,18 @@ function renderAiRecap(aiRecap, generatedAt) {
 
   if (!aiRecap) {
     if (dateEl) dateEl.textContent = "Recap not yet available";
-    textEl.textContent = "AI-generated market recap isn't wired up yet for this deployment. This section will summarize yesterday, the last 3 days, month-to-date, and year-to-date market conditions once pipeline/ai_narrative.py is implemented.";
+    textEl.innerHTML = "<p>AI-generated market recap isn't wired up yet for this deployment. This section will summarize yesterday's market, how well it was forecast, and what's ahead once pipeline/ai_narrative.py is generating recaps for this deployment.</p>";
     return;
   }
   if (dateEl) dateEl.textContent = generatedAt ? `Generated ${formatTimestamp(generatedAt)}` : "";
-  textEl.textContent = aiRecap;
+
+  // Split on blank lines so multi-paragraph recaps actually render as
+  // separate paragraphs — plain .textContent collapses "\n\n" to nothing
+  // visually. Falls back to one paragraph if the model didn't include any
+  // blank lines at all. Escaped since this is free-form model-authored text,
+  // not our own computed values like everywhere else in this file.
+  const paragraphs = aiRecap.split(/\n{2,}/).map((p) => p.trim()).filter(Boolean);
+  textEl.innerHTML = paragraphs.map((p) => `<p>${escapeHtml(p)}</p>`).join("");
 }
 
 // ── Load + render everything ────────────────────────────────────────────────

@@ -24,6 +24,7 @@ from market_data import get_net_load_series, get_hub_energy_prices, get_as_price
 from aggregations import rollup_all_windows
 from ai_narrative import build_recap_prompt, generate_recap
 from bid_close_forecast import get_bid_close_forecast
+from narrative_highlights import compute_highlights, load_hen_node_windows
 
 
 def load_config(path: str) -> dict:
@@ -94,16 +95,29 @@ def build(config: dict) -> dict:
     if features.get("ai_narrative"):
         try:
             print("Generating AI recap...")
+            hen_node_windows = load_hen_node_windows()
+            highlights = compute_highlights(
+                output.get("hub_windows", {}),
+                output.get("as_windows", {}),
+                output.get("net_load", {}),
+                hen_node_windows,
+                today_str=today.isoformat(),
+                yesterday_str=yesterday,
+            )
             prompt = build_recap_prompt(
                 output.get("hub_windows", {}),
                 output.get("as_windows", {}),
                 output.get("net_load", {}),
+                highlights,
+                config["display_name"],
+                today.isoformat(),
             )
             output["ai_recap"] = generate_recap(prompt)
-        except (NotImplementedError, RuntimeError) as e:
-            # ai_narrative.py is still a stub — don't let that block the rest
-            # of the report from being written while it's being filled in.
-            print(f"  WARN: ai_narrative not ready yet ({e}) — skipping recap")
+        except Exception as e:
+            # Never let a recap failure (stub, bad key, transient API error,
+            # unexpected data shape) block the rest of the report from being
+            # written.
+            print(f"  WARN: ai_narrative failed ({e}) — skipping recap")
             output["ai_recap"] = None
 
     return output
