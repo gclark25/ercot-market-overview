@@ -77,35 +77,55 @@ def _pick_bid_close_doc(archives: list[dict], cutoff_iso: str) -> dict | None:
     return max(candidates, key=lambda a: a["postDatetime"])
 
 
-def _download_and_parse_csv(emil_id: str, doc_id: int, token: str, creds: ErcotCredentials, label: str) -> list[dict]:
-    raw = download_archive_documents(emil_id, [doc_id], token, creds)
+def _parse_rows_from_zip_bytes(raw: bytes, label: str, depth: int = 0) -> list[dict]:
+    """
+    Confirmed from a real production download (2026-08-09 run): ERCOT wraps
+    the archive in a ZIP that itself contains ANOTHER ZIP — a member named
+    like '...LFMODWEATHERNP3565_csv.zip', not a raw .csv. Descends through
+    nested zips (checked by content via zipfile.is_zipfile, not just the
+    ".zip" name — a file could be zipped without ".zip" in its name) until
+    it finds actual CSV text, at whatever depth that turns out to be. Depth
+    is capped at 4 purely as a safety bound against something unexpected
+    (e.g. a corrupt file that loops), not because deeper nesting is expected.
+    """
+    if depth > 4:
+        print(f"    WARN: [{label}] zip nesting exceeded depth 4 — giving up on this file")
+        return []
+
     rows: list[dict] = []
     with zipfile.ZipFile(io.BytesIO(raw)) as zf:
         entries = zf.infolist()
-        # Unconditional — this is the one thing that was missing last run: if
-        # nothing inside ends in ".csv", the old code never printed anything
-        # at all, leaving no clue what the archive actually contains.
-        print(f"    [{label}] archive ZIP contents: {[(e.filename, e.file_size) for e in entries]}")
+        print(f"    [{label}]{'  ' * depth} zip contents (depth {depth}): {[(e.filename, e.file_size) for e in entries]}")
 
-        csv_names = [e.filename for e in entries if e.filename.lower().endswith(".csv")]
-        # Fallback: if nothing matches ".csv" by name, try every non-directory
-        # entry anyway — some ERCOT archives may name the file differently
-        # (no extension, .CSV variants already handled by .lower(), or a
-        # different format entirely that this will at least surface).
-        candidate_names = csv_names or [e.filename for e in entries if not e.filename.endswith("/")]
+        for e in entries:
+            if e.filename.endswith("/"):
+                continue
+            member_bytes = zf.read(e.filename)
 
-        for name in candidate_names:
-            with zf.open(name) as f:
-                text = io.TextIOWrapper(f, encoding="utf-8-sig")
-                reader = csv_module.DictReader(text)
-                batch = list(reader)
-                if batch and not rows:
-                    # Diagnostic: print actual headers once per report type,
-                    # so a wrong column-name guess is visible immediately in
-                    # the Action log rather than silently producing zero rows.
-                    print(f"    [{label}] archive CSV columns: {list(batch[0].keys())}")
-                rows.extend(batch)
+            if zipfile.is_zipfile(io.BytesIO(member_bytes)):
+                rows.extend(_parse_rows_from_zip_bytes(member_bytes, label, depth + 1))
+                continue
+
+            try:
+                text = member_bytes.decode("utf-8-sig")
+            except UnicodeDecodeError:
+                print(f"    WARN: [{label}] member '{e.filename}' is neither a nested zip nor UTF-8 text — skipping")
+                continue
+
+            batch = list(csv_module.DictReader(io.StringIO(text)))
+            if batch and not rows:
+                # Diagnostic: print actual headers once per report type, so a
+                # wrong column-name guess is visible immediately in the
+                # Action log rather than silently producing zero rows.
+                print(f"    [{label}] archive CSV columns: {list(batch[0].keys())}")
+            rows.extend(batch)
     return rows
+
+
+def _download_and_parse_csv(emil_id: str, doc_id: int, token: str, creds: ErcotCredentials, label: str) -> list[dict]:
+    raw = download_archive_documents(emil_id, [doc_id], token, creds)
+    return _parse_rows_from_zip_bytes(raw, label)
+
 
 
 def _extract_day_from_rows(rows: list[dict], target_date: str, value_field_candidates: list[str], hour_field_candidates: list[str] = LOAD_HOUR_FIELD_CANDIDATES) -> dict[int, float]:
