@@ -197,13 +197,22 @@ def _extract_day_from_rows(rows: list[dict], target_date: str, value_field_candi
     return by_hour
 
 
-def get_bid_close_forecast(creds: ErcotCredentials, token: str, days_forecast: int = 5) -> dict:
+def get_bid_close_forecast(creds: ErcotCredentials, token: str, days_history: int = 2, days_forecast: int = 5) -> dict:
     """
     Returns { "YYYY-MM-DD": { "HH": {"gross_load", "wind", "solar", "net_load"} } }
-    for whichever forecast days a matching bid-close posting could be found
-    and parsed — missing days are simply absent from the result, not errors.
+    for whichever days (both the days_history days already shown as actuals
+    on the net load chart, and the days_forecast days shown as the latest
+    forecast) a matching bid-close posting could be found and parsed —
+    missing days are simply absent from the result, not errors. Unlike the
+    forecast days, every history day's cutoff is guaranteed to already be in
+    the past, so the future-cutoff guard below never trims those.
+
+    days_history defaults to 2 to match get_net_load_series' own history
+    window (ERCOT's confirmed 48h actuals retention for wind/solar) — no
+    point requesting bid-close for a history day the chart doesn't show.
     """
     today = date.today()
+    offsets = range(-days_history, days_forecast)
 
     # One broad archive-list query per report covering the whole window,
     # rather than a separate list call per delivery day. Paced with a short
@@ -211,8 +220,8 @@ def get_bid_close_forecast(creds: ErcotCredentials, token: str, days_forecast: i
     # the whole subscription, not per-endpoint, so hammering these list calls
     # back-to-back risks tripping into 429s that then bleed into whatever
     # pull runs next in the pipeline, not just this one.
-    earliest_cutoff_day = today - timedelta(days=1)
-    latest_cutoff_day = today + timedelta(days=max(days_forecast - 1, 0))
+    earliest_cutoff_day = (today + timedelta(days=min(offsets))) - timedelta(days=1)
+    latest_cutoff_day = (today + timedelta(days=max(offsets))) - timedelta(days=1)
     post_from = f"{earliest_cutoff_day.isoformat()}T00:00:00"
     post_to = f"{latest_cutoff_day.isoformat()}T{BID_CLOSE_CUTOFF_HOUR_CT:02d}:00:00"
 
@@ -240,11 +249,27 @@ def get_bid_close_forecast(creds: ErcotCredentials, token: str, days_forecast: i
         return download_cache[key]
 
     result: dict[str, dict] = {}
-    for offset in range(days_forecast):
+    now = datetime.now()  # naive; assumed to track Central Time given this only ever
+                           # runs via the scheduled 07:15 CT cron or a same-day manual
+                           # trigger — see BID_CLOSE_CUTOFF_HOUR_CT's own caveat about
+                           # this same assumption for postDatetime comparisons.
+    for offset in offsets:
         delivery_day = today + timedelta(days=offset)
         cutoff_day = delivery_day - timedelta(days=1)
-        cutoff_iso = _central_time_cutoff(cutoff_day, BID_CLOSE_CUTOFF_HOUR_CT)
+        cutoff_dt = datetime(cutoff_day.year, cutoff_day.month, cutoff_day.day, BID_CLOSE_CUTOFF_HOUR_CT)
         target = delivery_day.isoformat()
+
+        if cutoff_dt > now:
+            # This delivery day's bid-close deadline is still in the future —
+            # there is no real bid-close snapshot for it yet. Confirmed
+            # necessary from production: without this guard, days further
+            # out than "tomorrow" were silently reusing whatever the latest
+            # available posting happened to be and presenting it as if it
+            # were that day's actual bid-close, which it wasn't.
+            print(f"    bid-close for {target} — cutoff ({cutoff_dt.isoformat()}) hasn't happened yet, skipping")
+            continue
+
+        cutoff_iso = _central_time_cutoff(cutoff_day, BID_CLOSE_CUTOFF_HOUR_CT)
 
         try:
             load_doc = _pick_bid_close_doc(load_archives, cutoff_iso)
