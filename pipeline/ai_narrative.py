@@ -53,10 +53,10 @@ Cover, in this order, skipping any part with nothing genuinely notable to say:
         sections.append("Pre-computed: HEN's own standout asset yesterday, by realized 2-hour arbitrage spread (TB2):\n" + json.dumps(highlights["notable_hen_node"]))
 
     if highlights.get("bid_close_accuracy"):
-        sections.append("Pre-computed: yesterday's actual net load vs. the forecast as of bid-close (09:00 CT the day before) — mean_error_mw is signed, positive means actual came in above the bid-close forecast:\n" + json.dumps(highlights["bid_close_accuracy"]))
+        sections.append("Pre-computed: yesterday's actual net load vs. the forecast as of bid-close (09:00 CT the day before) — all figures are in GW (matching the net load chart's own units). mean_error_gw is signed, positive means actual came in above the bid-close forecast:\n" + json.dumps(highlights["bid_close_accuracy"]))
 
     if highlights.get("today_forecast_drift"):
-        sections.append("Pre-computed: how much today's current forecast has moved from this morning's bid-close snapshot — positive means the current forecast is higher:\n" + json.dumps(highlights["today_forecast_drift"]))
+        sections.append("Pre-computed: how much today's current forecast has moved from this morning's bid-close snapshot — all figures are in GW (matching the net load chart's own units). mean_drift_gw is signed and net over the day (can look small even if the forecast genuinely shifted, if it moved up in some hours and down in others) — mean_abs_drift_gw and max_abs_drift_gw show the real hour-by-hour magnitude and describe how much it actually moved, which is usually the more accurate story to tell:\n" + json.dumps(highlights["today_forecast_drift"]))
 
     if highlights.get("as_highlight"):
         sections.append("Pre-computed: an ancillary service price that looks like a genuine outlier vs. its own YTD average:\n" + json.dumps(highlights["as_highlight"]))

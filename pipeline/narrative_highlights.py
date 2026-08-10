@@ -102,8 +102,14 @@ def compute_bid_close_accuracy(net_load: dict, day: str) -> dict | None:
 
     return {
         "day": day,
-        "mean_error_mw": round(sum(diffs) / len(diffs), 2),  # positive = actual came in ABOVE the bid-close forecast
-        "mean_abs_error_mw": round(sum(abs(d) for d in diffs) / len(diffs), 2),
+        # All net_load/wind/solar figures are already in GW throughout this
+        # pipeline (bid_close_forecast.py explicitly divides by 1000 from
+        # ERCOT's raw MW), matching what the net load chart itself displays
+        # — confirmed as a real mislabeling bug in production: this used to
+        # be named *_mw, which was wrong by a factor of 1000, not just a
+        # cosmetic issue.
+        "mean_error_gw": round(sum(diffs) / len(diffs), 2),  # positive = actual came in ABOVE the bid-close forecast
+        "mean_abs_error_gw": round(sum(abs(d) for d in diffs) / len(diffs), 2),
         "dominant_component": dominant_component,
         "hours_compared": len(diffs),
     }
@@ -129,7 +135,21 @@ def compute_today_forecast_drift(net_load: dict, today: str) -> dict | None:
 
     return {
         "day": today,
-        "mean_drift_mw": round(sum(diffs) / len(diffs), 2),  # positive = current forecast is HIGHER than this morning's
+        # Same GW clarification as compute_bid_close_accuracy above.
+        "mean_drift_gw": round(sum(diffs) / len(diffs), 2),  # signed — positive means the current forecast
+                                                              # is net HIGHER than this morning's; can mask real
+                                                              # movement if the day shifted up in some hours and
+                                                              # down in others (confirmed in production: a chart
+                                                              # showing a clear midday gap still reported "under
+                                                              # 2" here, because it netted out over 24 hours)
+        "mean_abs_drift_gw": round(sum(abs(d) for d in diffs) / len(diffs), 2),  # magnitude, hour by hour —
+                                                                                  # this is what actually answers
+                                                                                  # "how much has today's forecast
+                                                                                  # moved," independent of whether
+                                                                                  # it netted out over the day
+        "max_abs_drift_gw": round(max(abs(d) for d in diffs), 2),  # the single largest hourly swing —
+                                                                    # names the actual worst-case shift, not
+                                                                    # just an average of it
         "hours_compared": len(diffs),
     }
 
