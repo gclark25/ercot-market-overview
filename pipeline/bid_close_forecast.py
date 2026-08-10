@@ -29,7 +29,7 @@ import csv as csv_module
 import io
 import time
 import zipfile
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 from ercot_client import ErcotCredentials, list_archive_documents, download_archive_documents
 
@@ -43,10 +43,15 @@ LOAD_EMIL = "np3-565-cd"
 WIND_EMIL = "np4-732-cd"
 SOLAR_EMIL = "np4-745-cd"
 
-# Multiple plausible column-name variants per field, tried in order, since the
-# archived CSV's exact headers aren't confirmed (see module docstring).
-DATE_FIELD_CANDIDATES = ["DeliveryDate", "deliveryDate", "Delivery Date", "delivery_date"]
-LOAD_HOUR_FIELD_CANDIDATES = ["HourEnding", "hourEnding", "Hour Ending", "hour_ending"]
+# Column names confirmed directly from production downloads (2026-08-10 run):
+#   load:  DeliveryDate, HourEnding, SystemTotal, Model, InUseFlag, ...
+#   wind:  DELIVERY_DATE, HOUR_ENDING, STWPF_SYSTEM_WIDE, ...
+#   solar: DELIVERY_DATE, HOUR_ENDING, STPPF_SYSTEM_WIDE, ...
+# Kept as a candidate LIST (not hardcoded to just these) in case a future
+# posting uses a slightly different variant — cheap insurance, not a sign
+# these are still unconfirmed.
+DATE_FIELD_CANDIDATES = ["DeliveryDate", "DELIVERY_DATE", "deliveryDate", "Delivery Date", "delivery_date"]
+HOUR_FIELD_CANDIDATES = ["HourEnding", "HOUR_ENDING", "hourEnding", "Hour Ending", "hour_ending"]
 LOAD_VALUE_FIELD_CANDIDATES = ["SystemTotal", "systemTotal", "System Total", "LoadForecast", "MTLF"]
 WIND_VALUE_FIELD_CANDIDATES = ["STWPFSystemWide", "STWPF System Wide", "STWPF_SYSTEM_WIDE"]
 SOLAR_VALUE_FIELD_CANDIDATES = ["STPPFSystemWide", "STPPF System Wide", "STPPF_SYSTEM_WIDE"]
@@ -128,14 +133,58 @@ def _download_and_parse_csv(emil_id: str, doc_id: int, token: str, creds: ErcotC
 
 
 
-def _extract_day_from_rows(rows: list[dict], target_date: str, value_field_candidates: list[str], hour_field_candidates: list[str] = LOAD_HOUR_FIELD_CANDIDATES) -> dict[int, float]:
-    by_hour: dict[int, float] = {}
-    for row in rows:
-        d = str(_first_present(row, DATE_FIELD_CANDIDATES) or "")[:10]
-        if d != target_date:
+_DATE_FORMATS = ("%Y-%m-%d", "%m/%d/%Y", "%Y/%m/%d", "%m-%d-%Y", "%Y-%m-%dT%H:%M:%S")
+
+
+def _normalize_date(raw) -> str | None:
+    """The archived CSV's date format isn't guaranteed to match the ISO
+    format the live JSON endpoints use — tries several common formats
+    rather than assuming one, so a format this list doesn't cover shows up
+    as a visible None in the diagnostic sample rather than a silent
+    string-slice mismatch."""
+    raw = str(raw or "").strip()
+    if not raw:
+        return None
+    for fmt in _DATE_FORMATS:
+        try:
+            return datetime.strptime(raw, fmt).date().isoformat()
+        except ValueError:
             continue
+    return None
+
+
+def _row_is_in_use(row: dict) -> bool:
+    """Some ERCOT forecast archives carry multiple competing model rows per
+    (date, hour) with an InUseFlag marking the authoritative one — the same
+    lesson already learned earlier in this project for the live JSON load
+    forecast endpoint. Conservative on purpose: only explicitly-false markers
+    are excluded; missing/blank/ambiguous values pass through rather than
+    risk filtering out the one row actually needed."""
+    if "InUseFlag" not in row:
+        return True
+    return str(row["InUseFlag"]).strip().upper() not in ("N", "NO", "FALSE", "0")
+
+
+def _extract_day_from_rows(rows: list[dict], target_date: str, value_field_candidates: list[str], hour_field_candidates: list[str] = HOUR_FIELD_CANDIDATES) -> dict[int, float]:
+    by_hour: dict[int, float] = {}
+    sample_printed = False
+    for row in rows:
+        if not _row_is_in_use(row):
+            continue
+        raw_date = _first_present(row, DATE_FIELD_CANDIDATES)
+        d = _normalize_date(raw_date)
         he_raw = _first_present(row, hour_field_candidates)
         val_raw = _first_present(row, value_field_candidates)
+
+        if not sample_printed and raw_date is not None:
+            # One sample per call — if dates still don't match after this
+            # fix, this line shows exactly why (raw format vs. what got
+            # normalized) instead of another silent zero-rows outcome.
+            print(f"    sample row: date_raw={raw_date!r} -> normalized={d!r}, hour_raw={he_raw!r}, value_raw={val_raw!r}, target={target_date!r}")
+            sample_printed = True
+
+        if d != target_date:
+            continue
         if he_raw is None or val_raw is None:
             continue
         try:
