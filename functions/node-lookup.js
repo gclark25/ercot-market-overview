@@ -50,8 +50,14 @@ const TOKEN_CACHE_TTL_SECONDS = 45 * 60; // ERCOT's actual token TTL isn't confi
                                           // in this codebase — 45 min is a conservative guess.
                                           // If lookups start failing with 401s, this is the
                                           // first thing to check/shorten.
-const BACKFILL_DEDUPE_TTL_SECONDS = 3600; // don't fire a new dispatch for the same node more
-                                           // than once an hour, even if it's searched repeatedly
+const BACKFILL_DEDUPE_TTL_SECONDS = 120; // don't fire a new dispatch for the same node within a
+                                          // couple minutes of the last one — just enough to stop a
+                                          // literal double-click from spamming two dispatches, without
+                                          // blocking a genuine retry after a failed backfill. This
+                                          // cache only knows a dispatch was SENT, not whether the
+                                          // resulting workflow actually succeeded — confirmed in
+                                          // production that a full 1-hour window left someone unable
+                                          // to retry a node whose backfill had failed downstream.
 
 export async function onRequestGet(context) {
   const { request, env } = context;
