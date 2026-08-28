@@ -67,9 +67,6 @@ def _get_net_load_actuals(creds: ErcotCredentials, token: str, start: str, end: 
     wind_by_day_hour: dict[str, dict[int, float]] = defaultdict(dict)
     solar_by_day_hour: dict[str, dict[int, float]] = defaultdict(dict)
 
-    # Gross load — np6-345-cd/act_sys_load_by_wzn
-    # Row layout: [date, hourEnding, ...zone values..., systemTotal] — take the
-    # last numeric value in row[1:] as systemTotal (matches collect_data()).
     try:
         rows = ercot_get_raw("np6-345-cd/act_sys_load_by_wzn", token, creds,
                               {"operatingDayFrom": start, "operatingDayTo": end})
@@ -88,7 +85,6 @@ def _get_net_load_actuals(creds: ErcotCredentials, token: str, start: str, end: 
     except Exception as e:
         print(f"    WARN: net load actual gross load failed — {e}")
 
-    # Wind actual — np4-732-cd/wpp_hrly_avrg_actl_fcast, row[1]=date, row[2]=hour, row[3]=value
     try:
         rows = ercot_get_raw("np4-732-cd/wpp_hrly_avrg_actl_fcast", token, creds,
                               {"deliveryDateFrom": start, "deliveryDateTo": end})
@@ -103,7 +99,6 @@ def _get_net_load_actuals(creds: ErcotCredentials, token: str, start: str, end: 
     except Exception as e:
         print(f"    WARN: net load actual wind failed — {e}")
 
-    # Solar actual — np4-737-cd/spp_hrly_avrg_actl_fcast, same layout as wind
     try:
         rows = ercot_get_raw("np4-737-cd/spp_hrly_avrg_actl_fcast", token, creds,
                               {"deliveryDateFrom": start, "deliveryDateTo": end})
@@ -126,7 +121,6 @@ def _get_net_load_forecast(creds: ErcotCredentials, token: str, start: str, end:
     wind_by_day_hour: dict[str, dict[int, float]] = defaultdict(dict)
     solar_by_day_hour: dict[str, dict[int, float]] = defaultdict(dict)
 
-    # Load forecast — np3-565-cd/lf_by_model_weather_zone, filter inUseFlag == True only
     try:
         rows = ercot_get_records("np3-565-cd/lf_by_model_weather_zone", token, creds,
                                   {"deliveryDateFrom": start, "deliveryDateTo": end, "size": 5000})
@@ -147,9 +141,6 @@ def _get_net_load_forecast(creds: ErcotCredentials, token: str, start: str, end:
     except Exception as e:
         print(f"    WARN: net load forecast load failed — {e}")
 
-    # Wind forecast — np4-732-cd/wpp_hrly_avrg_actl_fcast, STWPFSystemWide.
-    # This is a system-wide total repeated across zone rows — take the FIRST
-    # occurrence per (date, hour) key, never sum across rows.
     try:
         rows = ercot_get_records("np4-732-cd/wpp_hrly_avrg_actl_fcast", token, creds,
                                   {"deliveryDateFrom": start, "deliveryDateTo": end, "size": 5000})
@@ -166,7 +157,6 @@ def _get_net_load_forecast(creds: ErcotCredentials, token: str, start: str, end:
     except Exception as e:
         print(f"    WARN: net load forecast wind failed — {e}")
 
-    # Solar forecast — np4-745-cd/spp_hrly_actual_fcast_geo, STPPFSystemWide, same first-row-per-key rule
     try:
         rows = ercot_get_records("np4-745-cd/spp_hrly_actual_fcast_geo", token, creds,
                                   {"deliveryDateFrom": start, "deliveryDateTo": end, "size": 5000})
@@ -263,7 +253,7 @@ def get_hub_energy_prices(creds: ErcotCredentials, token: str, hubs: list[str], 
     out: dict[str, dict] = {}
     for i, hub in enumerate(hubs):
         if i > 0:
-            time.sleep(3)  # pacing between hubs, matching the original per-node loop
+            time.sleep(3)
 
         rt_hourly: dict[str, dict[int, float]] = defaultdict(dict)
         da_hourly: dict[str, dict[int, float]] = defaultdict(dict)
@@ -284,7 +274,7 @@ def get_hub_energy_prices(creds: ErcotCredentials, token: str, hubs: list[str], 
         except Exception as e:
             print(f"    WARN: RT prices for {hub} — {e}")
 
-        time.sleep(3)  # pacing between the RT and DA pulls for the same hub
+        time.sleep(3)
 
         try:
             rows = ercot_get_raw("np4-190-cd/dam_stlmnt_pnt_prices", token, creds, {
@@ -367,7 +357,7 @@ def get_as_prices(creds: ErcotCredentials, token: str, start: str, end: str) -> 
                                  {"deliveryDateFrom": start, "deliveryDateTo": end}, paginate=True)
     da = _bucket_as_rows(da_rows, start, end)
 
-    time.sleep(3)  # pacing between the two big paginated pulls, not just within each one
+    time.sleep(3)
 
     rt_rows = ercot_get_records("np6-332-cd/rt_clear_price_cap_sced", token, creds, {
         "SCEDTimestampFrom": start + "T00:00:00", "SCEDTimestampTo": end + "T23:59:59",
@@ -407,7 +397,27 @@ def _bucket_as_rows(rows: list[dict], start: str, end: str) -> dict[str, dict[in
         canonical = AS_TYPE_MAP.get(raw_type)
         if not canonical:
             continue
-        price = row.get("MCPC") or row.get("mcpc") or row.get("price") or row.get("Price")
+        # ERCOT split the RT report's single MCPC field into cappedMCPC/
+        # uncappedMCPC at some point after Aug 10, 2026 (confirmed from a
+        # real row: {'cappedMCPC': 7.63, 'uncappedMCPC': 7.63}, no MCPC key
+        # at all) — the DA source hasn't changed, and this function buckets
+        # both, so every old name has to stay alongside the new ones.
+        # cappedMCPC is preferred: it's what SCED actually settles AS
+        # payments against, and it's the report's own name
+        # (rt_clear_price_cap_sced is specifically about the capped price).
+        # `is not None` throughout, not `or` — a real $0.00 clearing price
+        # is valid and must not be treated the same as a missing field.
+        price = row.get("cappedMCPC")
+        if price is None:
+            price = row.get("uncappedMCPC")
+        if price is None:
+            price = row.get("MCPC")
+        if price is None:
+            price = row.get("mcpc")
+        if price is None:
+            price = row.get("price")
+        if price is None:
+            price = row.get("Price")
         if price is None:
             continue
         try:
