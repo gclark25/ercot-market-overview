@@ -1,6 +1,6 @@
 {
   "node": "GOMZ_RN",
-  "last_updated": "2026-09-08",
+  "last_updated": "2026-09-09",
   "days": {
     "2026-01-01": {
       "1": {
@@ -36641,136 +36641,282 @@
         "dart": -1.93,
         "peak": "off"
       }
+    },
+    "2026-09-09": {
+      "1": {
+        "da": 33.41,
+        "rt": 36.57,
+        "dart": -3.16,
+        "peak": "off"
+      },
+      "2": {
+        "da": 31.09,
+        "rt": 33.12,
+        "dart": -2.03,
+        "peak": "off"
+      },
+      "3": {
+        "da": 30.43,
+        "rt": 32.5,
+        "dart": -2.07,
+        "peak": "off"
+      },
+      "4": {
+        "da": 28.95,
+        "rt": 32.04,
+        "dart": -3.09,
+        "peak": "off"
+      },
+      "5": {
+        "da": 30.28,
+        "rt": 32.12,
+        "dart": -1.84,
+        "peak": "off"
+      },
+      "6": {
+        "da": 34.18,
+        "rt": 32.67,
+        "dart": 1.51,
+        "peak": "off"
+      },
+      "7": {
+        "da": 40.11,
+        "rt": 37.12,
+        "dart": 2.99,
+        "peak": "on"
+      },
+      "8": {
+        "da": 35.43,
+        "rt": 39.93,
+        "dart": -4.5,
+        "peak": "on"
+      },
+      "9": {
+        "da": 26.39,
+        "rt": 26.75,
+        "dart": -0.36,
+        "peak": "on"
+      },
+      "10": {
+        "da": 21.36,
+        "rt": 22.64,
+        "dart": -1.28,
+        "peak": "on"
+      },
+      "11": {
+        "da": 21.96,
+        "rt": 24.9,
+        "dart": -2.94,
+        "peak": "on"
+      },
+      "12": {
+        "da": 25.47,
+        "rt": 30.97,
+        "dart": -5.5,
+        "peak": "on"
+      },
+      "13": {
+        "da": 34.79,
+        "rt": 43.64,
+        "dart": -8.85,
+        "peak": "on"
+      },
+      "14": {
+        "da": 41.76,
+        "rt": 50.03,
+        "dart": -8.27,
+        "peak": "on"
+      },
+      "15": {
+        "da": 44.41,
+        "rt": 50.33,
+        "dart": -5.92,
+        "peak": "on"
+      },
+      "16": {
+        "da": 47.34,
+        "rt": 31.19,
+        "dart": 16.15,
+        "peak": "on"
+      },
+      "17": {
+        "da": 47.24,
+        "rt": 32.66,
+        "dart": 14.58,
+        "peak": "on"
+      },
+      "18": {
+        "da": 59.29,
+        "rt": 35.26,
+        "dart": 24.03,
+        "peak": "on"
+      },
+      "19": {
+        "da": 87.01,
+        "rt": 75.3,
+        "dart": 11.71,
+        "peak": "on"
+      },
+      "20": {
+        "da": 106.69,
+        "rt": 78.67,
+        "dart": 28.02,
+        "peak": "on"
+      },
+      "21": {
+        "da": 101.19,
+        "rt": 61.52,
+        "dart": 39.67,
+        "peak": "on"
+      },
+      "22": {
+        "da": 92.93,
+        "rt": 44.42,
+        "dart": 48.51,
+        "peak": "on"
+      },
+      "23": {
+        "da": 58.92,
+        "rt": 38.22,
+        "dart": 20.7,
+        "peak": "off"
+      },
+      "24": {
+        "da": 40.61,
+        "rt": 34.61,
+        "dart": 6.0,
+        "peak": "off"
+      }
     }
   },
   "windows": {
     "yesterday": {
       "overall": {
-        "avg_da": 40.84,
-        "avg_rt": 38.51,
-        "dart_spread": 2.33,
-        "dart_spread_pct": 0.0571,
-        "rt_volatility": 30.31,
+        "avg_da": 46.72,
+        "avg_rt": 39.88,
+        "dart_spread": 6.84,
+        "dart_spread_pct": 0.1464,
+        "rt_volatility": 14.02,
         "hour_count": 24
       },
       "on_peak": {
-        "avg_da": 43.59,
-        "avg_rt": 39.62,
-        "dart_spread": 3.97,
-        "dart_spread_pct": 0.0911,
-        "rt_volatility": 36.96,
+        "avg_da": 52.09,
+        "avg_rt": 42.83,
+        "dart_spread": 9.26,
+        "dart_spread_pct": 0.1778,
+        "rt_volatility": 16.33,
         "hour_count": 16
       },
       "off_peak": {
-        "avg_da": 35.34,
-        "avg_rt": 36.29,
-        "dart_spread": -0.95,
-        "dart_spread_pct": -0.0269,
-        "rt_volatility": 4.2,
+        "avg_da": 35.98,
+        "avg_rt": 33.98,
+        "dart_spread": 2.0,
+        "dart_spread_pct": 0.0556,
+        "rt_volatility": 2.15,
         "hour_count": 8
       },
-      "tb1": 5.892,
+      "tb1": 2.335,
       "tb1_days": 1,
-      "tb2": 9.521,
+      "tb2": 4.435,
       "tb2_days": 1,
-      "tb4": 14.783,
+      "tb4": 6.69,
       "tb4_days": 1
     },
     "3day": {
       "overall": {
-        "avg_da": 42.46,
-        "avg_rt": 38.96,
-        "dart_spread": 3.5,
-        "dart_spread_pct": 0.0824,
-        "rt_volatility": 22.11,
+        "avg_da": 44.66,
+        "avg_rt": 38.88,
+        "dart_spread": 5.78,
+        "dart_spread_pct": 0.1294,
+        "rt_volatility": 22.47,
         "hour_count": 72
       },
       "on_peak": {
-        "avg_da": 45.12,
-        "avg_rt": 39.78,
-        "dart_spread": 5.34,
-        "dart_spread_pct": 0.1184,
-        "rt_volatility": 31.21,
-        "hour_count": 32
+        "avg_da": 47.44,
+        "avg_rt": 40.8,
+        "dart_spread": 6.64,
+        "dart_spread_pct": 0.14,
+        "rt_volatility": 27.21,
+        "hour_count": 48
       },
       "off_peak": {
-        "avg_da": 40.33,
-        "avg_rt": 38.3,
-        "dart_spread": 2.03,
-        "dart_spread_pct": 0.0503,
-        "rt_volatility": 9.98,
-        "hour_count": 40
+        "avg_da": 39.11,
+        "avg_rt": 35.04,
+        "dart_spread": 4.07,
+        "dart_spread_pct": 0.1041,
+        "rt_volatility": 3.42,
+        "hour_count": 24
       },
-      "tb1": 3.709,
+      "tb1": 3.776,
       "tb1_days": 3,
-      "tb2": 6.205,
+      "tb2": 6.526,
       "tb2_days": 3,
-      "tb4": 9.965,
+      "tb4": 10.357,
       "tb4_days": 3
     },
     "mtd": {
       "overall": {
-        "avg_da": 39.55,
-        "avg_rt": 40.35,
-        "dart_spread": -0.8,
-        "dart_spread_pct": -0.0202,
-        "rt_volatility": 35.23,
-        "hour_count": 192
+        "avg_da": 40.34,
+        "avg_rt": 40.3,
+        "dart_spread": 0.04,
+        "dart_spread_pct": 0.001,
+        "rt_volatility": 33.54,
+        "hour_count": 216
       },
       "on_peak": {
-        "avg_da": 42.64,
-        "avg_rt": 45.72,
-        "dart_spread": -3.08,
-        "dart_spread_pct": -0.0722,
-        "rt_volatility": 48.33,
-        "hour_count": 96
+        "avg_da": 43.99,
+        "avg_rt": 45.31,
+        "dart_spread": -1.32,
+        "dart_spread_pct": -0.03,
+        "rt_volatility": 45.18,
+        "hour_count": 112
       },
       "off_peak": {
-        "avg_da": 36.45,
-        "avg_rt": 34.98,
-        "dart_spread": 1.47,
-        "dart_spread_pct": 0.0403,
-        "rt_volatility": 9.39,
-        "hour_count": 96
+        "avg_da": 36.42,
+        "avg_rt": 34.9,
+        "dart_spread": 1.52,
+        "dart_spread_pct": 0.0417,
+        "rt_volatility": 9.05,
+        "hour_count": 104
       },
-      "tb1": 4.375,
-      "tb1_days": 8,
-      "tb2": 7.125,
-      "tb2_days": 8,
-      "tb4": 10.548,
-      "tb4_days": 8
+      "tb1": 4.149,
+      "tb1_days": 9,
+      "tb2": 6.826,
+      "tb2_days": 9,
+      "tb4": 10.119,
+      "tb4_days": 9
     },
     "ytd": {
       "overall": {
-        "avg_da": 37.09,
-        "avg_rt": 33.52,
-        "dart_spread": 3.57,
-        "dart_spread_pct": 0.0963,
-        "rt_volatility": 55.73,
-        "hour_count": 6023
+        "avg_da": 37.13,
+        "avg_rt": 33.55,
+        "dart_spread": 3.58,
+        "dart_spread_pct": 0.0964,
+        "rt_volatility": 55.63,
+        "hour_count": 6047
       },
       "on_peak": {
-        "avg_da": 32.05,
-        "avg_rt": 29.97,
-        "dart_spread": 2.08,
-        "dart_spread_pct": 0.0649,
-        "rt_volatility": 53.54,
-        "hour_count": 2864
+        "avg_da": 32.16,
+        "avg_rt": 30.04,
+        "dart_spread": 2.12,
+        "dart_spread_pct": 0.0659,
+        "rt_volatility": 53.42,
+        "hour_count": 2880
       },
       "off_peak": {
-        "avg_da": 41.69,
-        "avg_rt": 36.75,
+        "avg_da": 41.68,
+        "avg_rt": 36.74,
         "dart_spread": 4.94,
         "dart_spread_pct": 0.1185,
-        "rt_volatility": 57.46,
-        "hour_count": 3159
+        "rt_volatility": 57.39,
+        "hour_count": 3167
       },
-      "tb1": 3.989,
-      "tb1_days": 251,
-      "tb2": 7.091,
-      "tb2_days": 251,
-      "tb4": 11.797,
-      "tb4_days": 251
+      "tb1": 3.982,
+      "tb1_days": 252,
+      "tb2": 7.081,
+      "tb2_days": 252,
+      "tb4": 11.776,
+      "tb4_days": 252
     }
   }
 }
